@@ -1,0 +1,104 @@
+body {
+    margin: 0;
+}
+
+div#body-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+    margin: 0 auto;
+}
+
+div#game-wrapper {
+    position: relative;
+    flex-grow: 1;
+    aspect-ratio: 9 / 16;
+    height: 100%;
+}
+
+div#background,
+div.scene {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+div#background {
+    background: linear-gradient(
+        90deg,
+        rgb(124, 155, 255) 0%,
+        rgb(93 122 218) 25%,
+        rgb(59 84 167) 50%,
+        rgb(39 60 128) 75%,
+        rgb(15, 30, 66) 100%
+    );
+}
+
+/* card.svg coloring */
+
+svg.card {
+    --white-border: #ecf1ff;
+    --black-border: black;
+    --gray-border: #3e558a;
+}
+
+svg.card.gray path.frame {
+    stroke: var(--gray-border);
+    fill: #25355e;
+}
+
+svg.card.black path.frame {
+    stroke: var(--black-border);
+    fill: #10183a;
+}
+
+svg.card.white path.frame {
+    stroke: var(--white-border);
+    fill: #7697ef;
+}
+
+svg.card.gray .stars,
+svg.card.gray .beams {
+    fill: var(--gray-border);
+}
+
+svg.card.black .stars,
+svg.card.black .beams {
+    fill: var(--black-border);
+}
+
+svg.card.white .stars,
+svg.card.white .beams {
+    fill: var(--white-border);
+}
+
+svg.card .phase,
+svg.card .stars,
+svg.card .beams {
+    visibility: hidden;
+}
+
+svg.card.new-moon .stars,
+svg.card.waxing-crescent .stars.left,
+svg.card.waxing-crescent .beams.right,
+svg.card.first-quarter .stars.left,
+svg.card.first-quarter .beams.right,
+svg.card.waxing-gibbous .stars.left,
+svg.card.waxing-gibbous .beams.right,
+svg.card.waning-crescent .stars.right,
+svg.card.waning-crescent .beams.left,
+svg.card.final-quarter .stars.right,
+svg.card.final-quarter .beams.left,
+svg.card.waning-gibbous .stars.right,
+svg.card.waning-gibbous .beams.left,
+svg.card.full-moon .beams,
+svg.card.waxing-crescent .phase.waxing-crescent,
+svg.card.first-quarter .phase.first-quarter,
+svg.card.waxing-gibbous .phase.waxing-gibbous,
+svg.card.waning-crescent .phase.waning-crescent,
+svg.card.final-quarter .phase.final-quarter,
+svg.card.waning-gibbous .phase.waning-gibbous,
+svg.card.full-moon .phase.full-moon {
+    visibility: visible;
+}

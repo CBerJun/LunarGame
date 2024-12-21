@@ -1,0 +1,8 @@
+{
+    "type": "module",
+    "dependencies": {
+        "@rollup/plugin-node-resolve": "^15.0.1",
+        "minify": "^9.1.0",
+        "rollup": "^3.5.1"
+    }
+}

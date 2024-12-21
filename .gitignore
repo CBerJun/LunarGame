@@ -1,0 +1,18 @@
+# Generated
+/build
+/dist
+/src/frontend/backend.js
+/src/frontend/backend.wasm
+a.out
+a.out.js
+a.out.wasm
+*.exe
+*.lib
+*.exp
+*.pdb
+node_modules
+
+# IDE
+.vscode
+.vs
+CppProperties.json
