@@ -7,6 +7,10 @@ LunarGame * EMSCRIPTEN_KEEPALIVE Glue_NewLunarGame(void) {
     return (LunarGame *) malloc(sizeof(LunarGame));
 }
 
+DisplayableBoard * EMSCRIPTEN_KEEPALIVE Glue_NewDisplayableBoard(void) {
+    return (DisplayableBoard *) malloc(sizeof(DisplayableBoard));
+}
+
 void EMSCRIPTEN_KEEPALIVE Glue_Free(void *ptr) {
     free(ptr);
 }

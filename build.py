@@ -3,6 +3,8 @@ import os
 import sys
 import subprocess
 import shutil
+import re
+import contextlib
 
 build_script_mtime = os.path.getmtime(__file__)
 
@@ -52,22 +54,57 @@ EXPORTED_C_FUNCTIONS = [
     "LunarGame_Init",
     "LunarGame_PlayCard",
 ]
-BACKEND_FILES = glob.glob("src/backend/*.c")
 RELEASE = False
+BOARD_PATTERN = re.compile(r"BOARD_BEGIN\((\w+),")
 
-@builder("src/frontend/backend.js", BACKEND_FILES + ["src/frontend/glue.c"])
+@builder("build/boards_glue.c", ["src/backend/boards_data.inc"])
+def build_boards_glue() -> int:
+    with open("src/backend/boards_data.inc", "r", encoding="utf-8") as fp:
+        src = fp.read()
+    name2id = {}
+    for match in BOARD_PATTERN.finditer(src):
+        name2id[match.group(1)] = len(name2id)
+    with open("build/boards_glue.c", "w", encoding="utf-8") as fp:
+        fp.write(
+            '#include "../src/backend/lunar_game.h"\n'
+            '#include <emscripten/emscripten.h>\n'
+            'void EMSCRIPTEN_KEEPALIVE Glue_InitDisplayableBoard('
+            'DisplayableBoard *board, int preset) {'
+            'switch (preset) {'
+        )
+        for name, id_ in name2id.items():
+            fp.write(
+                f"case {id_}:"
+                f"INIT_DISPLAYABLE_PRESET_BOARD(board, {name}); break;"
+            )
+        fp.write('}}')
+    with open("src/frontend/boards.js", "w", encoding="utf-8") as fp:
+        fp.write("export const Boards = {")
+        for name, id_ in name2id.items():
+            fp.write(f"{name}: {id_},")
+        fp.write("};")
+    return 0
+
+ALL_C_SOURCES = [
+    *glob.iglob("src/backend/*.c"),
+    "src/frontend/glue.c",
+    "build/boards_glue.c",
+]
+
+@builder("src/frontend/backend.js", ALL_C_SOURCES)
 def build_backend() -> int:
-    backend_files = " ".join(BACKEND_FILES)
+    backend_files = " ".join(ALL_C_SOURCES)
     flags = "-D NDEBUG -O3 -sASSERTIONS=0" if RELEASE else ""
     exports = ",".join("_" + x for x in EXPORTED_C_FUNCTIONS)
     return os.system(
-        f"emcc -std=c99 -Wall {flags} src/frontend/glue.c {backend_files}"
+        f"emcc -std=c99 -Wall {flags} {backend_files}"
         f" -sEXPORTED_FUNCTIONS={exports} -sEXPORT_ES6"
         " -o src/frontend/backend.js"
     )
 
 @builder("build/lunar.bundle.js", [
     "src/frontend/backend.js",
+    "src/frontend/boards.js",
     "src/frontend/frontend.js",
 ])
 def build_bundle() -> int:
@@ -98,7 +135,9 @@ STATIC_FILES = [
     "lunar.css",
     "backend.wasm",
     "card.svg",
-    # "favicon.ico",
+    "star.svg",
+    "button_border.png",
+    "favicon.ico",
 ]
 
 def _make_static_builder(file: str):
@@ -118,8 +157,13 @@ def copy_all_static() -> int:
     return 0
 
 def main() -> int:
+    with contextlib.suppress(FileExistsError):
+        os.mkdir("build")
+    with contextlib.suppress(FileExistsError):
+        os.mkdir("dist")
     return (
-        build_backend()
+        build_boards_glue()
+        or build_backend()
         or build_bundle()
         or minify_bundle()
         or copy_all_static()

@@ -1,5 +1,6 @@
 body {
     margin: 0;
+    font-family: 'Times New Roman', Times, serif;
 }
 
 div#body-wrapper {
@@ -15,10 +16,16 @@ div#game-wrapper {
     flex-grow: 1;
     aspect-ratio: 9 / 16;
     height: 100%;
+    --half-moon-size: 30vh;
+}
+
+div.scene {
+    display: none;
 }
 
 div#background,
-div.scene {
+div.scene.visible {
+    display: block;
     position: absolute;
     width: 100%;
     height: 100%;
@@ -35,12 +42,100 @@ div#background {
     );
 }
 
-/* card.svg coloring */
+/* Loading scene */
+
+div#loading-scene.visible {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+div#loading-card-wrapper svg.card {
+    position: static;
+}
+
+/* Menu scene */
+
+div#menu-scene.visible,
+div#game-scene.visible {
+    padding-top: calc(var(--half-moon-size) * 0.55);
+    box-sizing: border-box;
+}
+
+div#menu-scene > :not(:last-child) {
+    margin-bottom: 4em;
+}
+
+div#menu-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 2em;
+    gap: 0.3em;
+}
+
+div#menu-buttons > button {
+    display: block;
+    padding: 0.3em 0;
+}
+
+/* Game scene */
+
+div#game-scene.visible {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding-left: 3vh;
+    padding-right: 3vh;
+}
+
+button#exit-button {
+    padding: 0.2em 0.6em;
+}
+
+div#lunar-cards-placeholder {
+    height: 5.2vh;
+    width: 100%;
+    margin: 1.5vh 0;
+}
+
+div#user-cards-placeholder {
+    height: 8vh;
+    width: 100%;
+}
+
+div#game-board {
+    margin: 1.5vh auto;
+}
+
+div#lunar-score-bar,
+div#user-score-bar {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* svg#half-moon */
+
+svg#half-moon {
+    display: block;
+    position: relative;
+    width: var(--half-moon-size);
+    top: calc(var(--half-moon-size) / -2);
+    margin: 0 auto;
+}
+
+/* svg.card coloring */
 
 svg.card {
     --white-border: #ecf1ff;
     --black-border: black;
     --gray-border: #3e558a;
+    position: absolute;
+    /* The actual position will be set dynamically. */
+    width: 8vh;
 }
 
 svg.card.gray path.frame {
@@ -101,4 +196,73 @@ svg.card.final-quarter .phase.final-quarter,
 svg.card.waning-gibbous .phase.waning-gibbous,
 svg.card.full-moon .phase.full-moon {
     visibility: visible;
+}
+
+/* svg.star coloring */
+
+svg.star {
+    width: 2.7vh;
+}
+svg.star.black path {
+    fill: black;
+    stroke: #35467d;
+}
+svg.star.white path {
+    fill: white;
+    stroke: #8494c3;
+}
+
+/* General stuffs */
+
+p {
+    color: white;
+    margin: 0.2em 0;
+    padding: 0 1em;
+}
+
+a {
+    color: #bdcfff;
+}
+a:visited {
+    color: #a2bbff;
+}
+a:hover {
+    color: #cad7ff;
+}
+
+button {
+    font-family: inherit;
+    font-size: inherit;
+    background: linear-gradient(
+        90deg,
+        rgb(96 134 255) 0%,
+        rgb(158 128 255) 100%
+    );
+    color: white;
+    border-style: solid;
+    border-image: url("button_border.png") 30 / 0.7em / 0.1em;
+}
+button:hover {
+    background: linear-gradient(
+        90deg,
+        rgb(58 104 255) 0%,
+        rgb(137 101 255) 100%
+    );
+}
+
+.fine-print {
+    font-size: 2.25vh;
+    color: #c6d5ff;
+}
+.size-normal {
+    font-size: 2.75vh;
+}
+.size-large {
+    font-size: 3.25vh;
+}
+.size-mega {
+    font-size: 4.5vh;
+}
+.centered-text {
+    text-align: center;
 }

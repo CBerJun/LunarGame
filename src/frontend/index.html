@@ -8,16 +8,82 @@
     </head>
     <body><div id="body-wrapper">
         <div id="game-wrapper">
-            <div id="background"></div>
-            <div class="scene" id="game-scene">
-                <!-- Lunar figure... -->
-                <!-- Lunar's card -->
-                <!-- Lunar's score -->
-                <div id="game-board">
+            <div id="background">
+                <svg xmlns="http://www.w3.org/2000/svg" id="half-moon"
+                    viewBox="0 0 100 100">
+                    <defs>
+                        <linearGradient id="half-moon-fill">
+                            <stop offset="0%" stop-color="white"></stop>
+                            <stop offset="45%" stop-color="#e7eaf5"></stop>
+                            <stop offset="50%" stop-color="#a1b2e8"></stop>
+                            <stop offset="53%" stop-color="#304181"></stop>
+                            <stop offset="56%" stop-color="#29376b"></stop>
+                            <stop offset="100%" stop-color="#1c274f"></stop>
+                        </linearGradient>
+                    </defs>
+                    <circle cx="50" cy="50" r="50"
+                        fill="url(#half-moon-fill)"></circle>
+                </svg>
+            </div>
+            <div class="scene" id="loading-scene">
+                <div id="loading-card-wrapper"></div>
+                <p class="size-normal" id="loading-text">Loading...</p>
+            </div>
+            <div class="scene" id="menu-scene">
+                <p class="centered-text">
+                    <span class="size-normal">
+                        An
+                        <a href="https://github.com/CBerJun/LunarGame"
+                            target="_blank" rel="noreferrer"
+                        >open source</a>
+                        clone of Google's board game
+                    </span>
+                    <br>
+                    <span class="size-mega">Rise of the Half Moon</span>
+                </p>
+                <p class="centered-text fine-print" id="best-record-text"></p>
+                <div id="menu-buttons" class="size-large">
+                    <button type="button" onclick="lunar.onTutorial()">
+                        Tutorial
+                    </button>
+                    <button type="button" onclick="lunar.onPlay()">
+                        Play
+                    </button>
+                    <button type="button" onclick="lunar.onCustomGame()">
+                        Custom Game
+                    </button>
                 </div>
-                <!-- Player's score -->
-                <!-- Player's cards -->
-                <!-- Player's wildcards? -->
+            </div>
+            <div class="scene" id="game-scene">
+                <div>
+                    <!--
+                        This div exists to prevent the flex mechanism from
+                        stretching the following button.
+                    -->
+                    <button id="exit-button" type="button" class="size-normal"
+                        onclick="lunar.onExitGame()">
+                        Exit
+                    </button>
+                </div>
+                <div id="lunar-cards-placeholder"></div>
+                <div id="lunar-score-bar">
+                    <span class="size-normal" id="lunar-score-text"></span>
+                    <div id="lunar-score-icon"></div>
+                </div>
+                <div id="game-board">
+                    <!-- The SVG that represents the edges -->
+                </div>
+                <div id="user-score-bar">
+                    <span class="size-normal" id="user-score-text"></span>
+                    <div id="user-score-icon"></div>
+                </div>
+                <div id="user-cards-placeholder"></div>
+                <!-- <div id="wildcards"></div> -->
+            </div>
+            <div class="scene" id="custom-settings-scene">
+                <!-- Game board -->
+                <!-- AI level -->
+                <!-- Button: Go! -->
             </div>
         </div>
     </div></body>

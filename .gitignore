@@ -3,6 +3,7 @@
 /dist
 /src/frontend/backend.js
 /src/frontend/backend.wasm
+/src/frontend/boards.js
 a.out
 a.out.js
 a.out.wasm
