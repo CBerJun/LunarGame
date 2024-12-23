@@ -318,6 +318,25 @@ EDGE(3, 6)
 EDGE(12, 9)
 EDGE(15, 10)
 BOARD_END
+DISPLAY_BEGIN(BigStage, 3, 3)
+// Exactly same as Four2x2
+POS(0, 0)
+POS(1, 0)
+POS(2, 0)
+POS(3, 0)
+POS(0, 1)
+POS(1, 1)
+POS(2, 1)
+POS(3, 1)
+POS(0, 2)
+POS(1, 2)
+POS(2, 2)
+POS(3, 2)
+POS(0, 3)
+POS(1, 3)
+POS(2, 3)
+POS(3, 3)
+DISPLAY_END
 
 BOARD_BEGIN(FourByFive, 20)
 // Horizontal
