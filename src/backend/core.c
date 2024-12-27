@@ -232,10 +232,12 @@ PatternNode *GameBoard_PutCard(
             break;
         // Add data to Lunar Cycle graph
         case 1:
+        case 1 - MoonPhase_NumPhases:
             SlotNode_ChainPrepend(&data->lc_successors, other_id);
             SlotNode_ChainPrepend(&other_data->lc_predecessors, slot_id);
             break;
         case -1:
+        case MoonPhase_NumPhases - 1:
             SlotNode_ChainPrepend(&data->lc_predecessors, other_id);
             SlotNode_ChainPrepend(&other_data->lc_successors, slot_id);
             break;
