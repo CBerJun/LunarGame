@@ -4,6 +4,7 @@
 /src/frontend/backend.js
 /src/frontend/backend.wasm
 /src/frontend/boards.js
+/src/frontend/backend_consts.js
 a.out
 a.out.js
 a.out.wasm

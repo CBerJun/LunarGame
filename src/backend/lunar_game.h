@@ -109,9 +109,13 @@ void SlotData_Init(SlotData *data);
 void SlotData_Deinit(SlotData *data);
 
 typedef struct GameBoard {
+    // Game board
     int num_slots;
     SlotData *slots;
     SlotNode **adj;
+    // Game states
+    int white_stars;
+    int black_stars;
 } GameBoard;
 
 GameBoard *GameBoard_New(int num_slots);
@@ -186,24 +190,15 @@ typedef struct DisplayableBoard {
 #define DISPLAY_END
 #include "boards_data.inc"
 
-/* driver.c */
+/* ai.c */
 
-MoonPhase RandomPhase(void);
-int ComputeStars(const PatternNode *patterns);
+typedef struct AIDecision {
+    int choice_id;
+    int slot_id;
+} AIDecision;
 
-#define NUM_CARDS_IN_A_HAND 3
-
-typedef struct LunarGame {
-    GameBoard *board;  // borrowed reference
-    MoonPhase white_cards[NUM_CARDS_IN_A_HAND];
-    MoonPhase black_cards[NUM_CARDS_IN_A_HAND];
-    int white_stars;
-    int black_stars;
-} LunarGame;
-
-void LunarGame_Init(LunarGame *game);
-PatternNode *LunarGame_PlayCard(
-    LunarGame *game, Player player, int card_index, int slot_id
+AIDecision *AIMove(
+    const GameBoard *board, const MoonPhase *choices, int num_choices
 );
 
 #endif  /* LUNAR_GAME_H */

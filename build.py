@@ -5,6 +5,7 @@ import subprocess
 import shutil
 import re
 import contextlib
+import json
 
 build_script_mtime = os.path.getmtime(__file__)
 
@@ -48,12 +49,6 @@ def builder(output, inputs):
         return _decorated
     return _decorator
 
-EXPORTED_C_FUNCTIONS = [
-    # The glue functions were defined with EMSCRIPTEN_KEEPALIVE and do
-    # not need to be included here.
-    "LunarGame_Init",
-    "LunarGame_PlayCard",
-]
 RELEASE = False
 BOARD_PATTERN = re.compile(r"BOARD_BEGIN\((\w+),")
 
@@ -85,13 +80,39 @@ def build_boards_glue() -> int:
         fp.write("};")
     return 0
 
+CONST_PATTERN = re.compile(r'ITEM\((\w+),')
+
+@builder("src/frontend/backend_consts.js", ["src/frontend/consts_glue.inc"])
+def build_consts_glue() -> int:
+    with open("src/frontend/consts_glue.inc", "r", encoding="utf-8") as fp:
+        src = fp.read()
+    names = [m.group(1) for m in CONST_PATTERN.finditer(src)]
+    with open("src/frontend/backend_consts.js", "w", encoding="utf-8") as fp:
+        fp.write("export const BackendConstNames = ")
+        json.dump(names, fp)
+        fp.write(";")
+    return 0
+
 ALL_C_SOURCES = [
     *glob.iglob("src/backend/*.c"),
     "src/frontend/glue.c",
     "build/boards_glue.c",
 ]
+ALL_BACKEND_DEPENDENCIES = [
+    *ALL_C_SOURCES,
+    "src/backend/lunar_game.h",
+    "src/backend/boards_data.inc",
+    "src/frontend/consts_glue.inc",
+]
+EXPORTED_C_FUNCTIONS = [
+    # The glue functions were defined with EMSCRIPTEN_KEEPALIVE and do
+    # not need to be included here.
+    "malloc",
+    "free",
+    "PatternNode_DeleteChain",
+]
 
-@builder("src/frontend/backend.js", ALL_C_SOURCES)
+@builder("src/frontend/backend.js", ALL_BACKEND_DEPENDENCIES)
 def build_backend() -> int:
     backend_files = " ".join(ALL_C_SOURCES)
     flags = "-D NDEBUG -O3 -sASSERTIONS=0" if RELEASE else ""
@@ -99,12 +120,14 @@ def build_backend() -> int:
     return os.system(
         f"emcc -std=c99 -Wall {flags} {backend_files}"
         f" -sEXPORTED_FUNCTIONS={exports} -sEXPORT_ES6"
+        " -sEXPORTED_RUNTIME_METHODS=getValue,setValue"
         " -o src/frontend/backend.js"
     )
 
 @builder("build/lunar.bundle.js", [
     "src/frontend/backend.js",
     "src/frontend/boards.js",
+    "src/frontend/backend_consts.js",
     "src/frontend/frontend.js",
 ])
 def build_bundle() -> int:
@@ -163,6 +186,7 @@ def main() -> int:
         os.mkdir("dist")
     return (
         build_boards_glue()
+        or build_consts_glue()
         or build_backend()
         or build_bundle()
         or minify_bundle()

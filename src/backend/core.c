@@ -67,12 +67,13 @@ void SlotData_Deinit(SlotData *data) {
 GameBoard *GameBoard_New(int num_slots) {
     GameBoard *g = (GameBoard *) malloc(sizeof(GameBoard));
     g->num_slots = num_slots;
-    g->slots = (SlotData *) calloc(num_slots, sizeof(SlotData));
-    g->adj = (SlotNode **) calloc(num_slots, sizeof(SlotNode*));
+    g->slots = (SlotData *) malloc(num_slots * sizeof(SlotData));
+    g->adj = (SlotNode **) malloc(num_slots * sizeof(SlotNode *));
     for (int i = 0; i < num_slots; ++i) {
         g->adj[i] = NULL;
         SlotData_Init(&g->slots[i]);
     }
+    g->black_stars = g->white_stars = 0;
     return g;
 }
 
@@ -113,9 +114,8 @@ void Pattern_Delete(Pattern *pattern) {
 }
 
 void PatternNode_DeleteChain(PatternNode *node) {
-    PatternNode *next;
     while (node != NULL) {
-        next = node->next;
+        PatternNode *next = node->next;
         Pattern_Delete(node->pattern);
         free(node);
         node = next;
@@ -211,6 +211,7 @@ PatternNode *GameBoard_PutCard(
     data->phase = phase;
     // Check for patterns
     PatternNode *patterns = NULL;
+    int *score = player == P_BLACK ? &board->black_stars : &board->white_stars;
     for (SlotNode *node = board->adj[slot_id]; node; node = node->next) {
         const int other_id = node->slot_id;
         SlotData *other_data = &board->slots[other_id];
@@ -223,12 +224,14 @@ PatternNode *GameBoard_PutCard(
         case 0:
             pattern = Pattern_New();
             pattern->kind = PK_PHASE_PAIR;
+            ++*score;
             break;
         // Check Full Moon
         case MoonPhase_NumPhases / 2:
         case -MoonPhase_NumPhases / 2:
             pattern = Pattern_New();
             pattern->kind = PK_FULL_MOON;
+            *score += 2;
             break;
         // Add data to Lunar Cycle graph
         case 1:
@@ -288,7 +291,7 @@ PatternNode *GameBoard_PutCard(
     // vertices)
     // Delete/Transfer ownership of candidate lists as we go
     SlotsNode *c = candidates;
-    HashMap *lunar_cycles = HashMap_New(bitsetHashWrapper, bitsetEqWrapper);
+    HashMap *cycles_seen = HashMap_New(bitsetHashWrapper, bitsetEqWrapper);
     while (c) {
         BitSet *bs = BitSet_New(board->num_slots);
         BitSet_Zero(bs);
@@ -305,30 +308,33 @@ PatternNode *GameBoard_PutCard(
             prev = i;
             ++length;
         }
-        if (length >= MIN_LUNAR_CYCLE_LEN) {
-            if (HashMap_Has(lunar_cycles, (void *) bs)) {
-                BitSet_Delete(bs);
-                SlotNode_DeleteChain(c->slots);
+        if (
+            length >= MIN_LUNAR_CYCLE_LEN
+            && !HashMap_Has(cycles_seen, (void *) bs)
+        ) {
+            // We've found a lunar cycle!
+            HashMap_Insert(cycles_seen, (void *) bs, NULL);
+            *score += length;
+            Pattern *new_pattern = Pattern_New();
+            new_pattern->kind = PK_LUNAR_CYCLE;
+            new_pattern->list = c->slots;
+            PatternNode_ChainPrepend(&patterns, new_pattern);
+            // Change owner of slots on the cycle
+            for (SlotNode *i = c->slots; i; i = i->next) {
+                board->slots[i->slot_id].owner = player;
             }
-            else {
-                HashMap_Insert(lunar_cycles, (void *) bs, (void *) c->slots);
-            }
+        }
+        else {
+            BitSet_Delete(bs);
+            SlotNode_DeleteChain(c->slots);
         }
         SlotsNode *next_c = c->next;
         free(c);
         c = next_c;
     }
-    HashMap_ITER_ENTRIES(lunar_cycles, pair)
+    HashMap_ITER_ENTRIES(cycles_seen, pair)
         BitSet_Delete((BitSet *) pair->key);
-        Pattern *new_pattern = Pattern_New();
-        new_pattern->kind = PK_LUNAR_CYCLE;
-        new_pattern->list = (SlotNode *) pair->value;
-        PatternNode_ChainPrepend(&patterns, new_pattern);
-        // Change owner of slots on the cycle
-        for (SlotNode *i = new_pattern->list; i; i = i->next) {
-            board->slots[i->slot_id].owner = player;
-        }
     HashMap_ITER_END
-    HashMap_Delete(lunar_cycles);
+    HashMap_Delete(cycles_seen);
     return patterns;
 }

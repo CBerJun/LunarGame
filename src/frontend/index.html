@@ -7,6 +7,19 @@
         <script defer src="lunar.bundle.min.js"></script>
     </head>
     <body><div id="body-wrapper">
+        <svg id="svg-defs" xmlns="http://www.w3.org/2000/svg"><defs>
+            <linearGradient id="card-back-fill"
+                gradientTransform="rotate(-45 0.5 0.5)">
+                <stop offset="0%" stop-color="#385fb7"/>
+                <stop offset="15%" stop-color="#2147a0"/>
+                <stop offset="35%" stop-color="#294b9d"/>
+                <stop offset="45%" stop-color="#4766b9"/>
+                <stop offset="55%" stop-color="#6b75c5"/>
+                <stop offset="80%" stop-color="#6058b3"/>
+                <stop offset="95%" stop-color="#9366cb"/>
+                <stop offset="100%" stop-color="#c26bde"/>
+            </linearGradient>
+        </defs></svg>
         <div id="game-wrapper">
             <div id="background">
                 <svg xmlns="http://www.w3.org/2000/svg" id="half-moon"
@@ -43,42 +56,60 @@
                 </p>
                 <p class="centered-text fine-print" id="best-record-text"></p>
                 <div id="menu-buttons" class="size-large">
-                    <button type="button" onclick="lunar.onTutorial()">
-                        Tutorial
-                    </button>
-                    <button type="button" onclick="lunar.onPlay()">
-                        Play
-                    </button>
-                    <button type="button" onclick="lunar.onCustomGame()">
-                        Custom Game
-                    </button>
+                    <button type="button" class="ui"
+                        onclick="lunar.onTutorial()"
+                    >Tutorial</button>
+                    <button type="button" class="ui"
+                        onclick="lunar.onPlay()"
+                    >Play</button>
+                    <button type="button" class="ui"
+                        onclick="lunar.onCustomGame()"
+                    >Custom Game</button>
                 </div>
             </div>
             <div class="scene" id="game-scene">
-                <div>
-                    <!--
-                        This div exists to prevent the flex mechanism from
-                        stretching the following button.
-                    -->
-                    <button id="exit-button" type="button" class="size-normal"
-                        onclick="lunar.onExitGame()">
-                        Exit
-                    </button>
+                <div id="game-floating-layer">
+                    <button id="exit-button" type="button"
+                        class="ui size-normal" onclick="lunar.onExitGame()"
+                    >Exit</button>
+                    <div id="game-board-slots"></div>
+                    <div id="game-board-cards"></div>
+                    <div id="user-hand"></div>
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                        id="user-card-selection-box" viewBox="0 0 100 100">
+                        <g fill="none" stroke="white" stroke-width="0.6">
+                            <circle cx="5" cy="5" r="5"></circle>
+                            <circle cx="95" cy="5" r="5"></circle>
+                            <circle cx="5" cy="95" r="5"></circle>
+                            <circle cx="95" cy="95" r="5"></circle>
+                            <path d="M5,5h90v90h-90Z"></path>
+                        </g>
+                    </svg>
+                    <div id="lunar-hand"></div>
+                    <div id="stars"></div>
+                    <div id="dialogue-box">
+                        <span class="size-normal" id="dialogue-content"></span>
+                    </div>
                 </div>
-                <div id="lunar-cards-placeholder"></div>
-                <div id="lunar-score-bar">
-                    <span class="size-normal" id="lunar-score-text"></span>
-                    <div id="lunar-score-icon"></div>
+                <div id="game-static-layer">
+                    <div id="lunar-cards-placeholder-wrapper">
+                        <div id="lunar-cards-placeholder"></div>
+                    </div>
+                    <div id="lunar-score-bar">
+                        <span class="size-normal" id="lunar-score-text"></span>
+                        <div id="lunar-score-icon"></div>
+                    </div>
+                    <div id="game-board">
+                        <svg xmlns="http://www.w3.org/2000/svg" id="edges"
+                        ></svg>
+                    </div>
+                    <div id="user-score-bar">
+                        <div id="user-score-icon"></div>
+                        <span class="size-normal" id="user-score-text"></span>
+                    </div>
+                    <div id="user-cards-placeholder"></div>
+                    <div id="wildcards"></div>
                 </div>
-                <div id="game-board">
-                    <!-- The SVG that represents the edges -->
-                </div>
-                <div id="user-score-bar">
-                    <span class="size-normal" id="user-score-text"></span>
-                    <div id="user-score-icon"></div>
-                </div>
-                <div id="user-cards-placeholder"></div>
-                <!-- <div id="wildcards"></div> -->
             </div>
             <div class="scene" id="custom-settings-scene">
                 <!-- Game board -->

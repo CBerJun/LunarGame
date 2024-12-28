@@ -3,20 +3,41 @@ body {
     font-family: 'Times New Roman', Times, serif;
 }
 
+svg#svg-defs {
+    /*
+    Note that "display: none" won't work because we still want to access
+    the defs using #ids.
+    */
+    height: 0;
+    width: 0;
+}
+
 div#body-wrapper {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     height: 100vh;
     margin: 0 auto;
 }
 
 div#game-wrapper {
     position: relative;
-    flex-grow: 1;
     aspect-ratio: 9 / 16;
-    height: 100%;
-    --half-moon-size: 30vh;
+    --half-moon-size: calc(30 * var(--gh));
+}
+/* --gh is 1% of height of div#game-wrapper */
+@media (min-aspect-ratio: 9 / 16) {
+    div#game-wrapper {
+        height: 100vh;
+        --gh: 1vh;
+    }
+}
+@media (max-aspect-ratio: 9 / 16) {
+    div#game-wrapper {
+        width: 100vw;
+        --gh: calc(16 / 9 * 1vw);
+    }
 }
 
 div.scene {
@@ -31,6 +52,8 @@ div.scene.visible {
     height: 100%;
 }
 
+/* Background */
+
 div#background {
     background: linear-gradient(
         90deg,
@@ -38,8 +61,18 @@ div#background {
         rgb(93 122 218) 25%,
         rgb(59 84 167) 50%,
         rgb(39 60 128) 75%,
-        rgb(15, 30, 66) 100%
+        rgb(50 65 100) 100%
     );
+    /* The half moon SVG needs this: */
+    overflow: hidden;
+}
+
+svg#half-moon {
+    display: block;
+    position: relative;
+    width: var(--half-moon-size);
+    top: calc(var(--half-moon-size) / -2);
+    margin: 0 auto;
 }
 
 /* Loading scene */
@@ -58,7 +91,7 @@ div#loading-card-wrapper svg.card {
 /* Menu scene */
 
 div#menu-scene.visible,
-div#game-scene.visible {
+div#game-static-layer {
     padding-top: calc(var(--half-moon-size) * 0.55);
     box-sizing: border-box;
 }
@@ -80,51 +113,129 @@ div#menu-buttons {
 div#menu-buttons > button {
     display: block;
     padding: 0.3em 0;
+    font-size: inherit;
 }
 
 /* Game scene */
 
-div#game-scene.visible {
+div#game-scene {
+    /* In order for "fly-in" animations to work: */
+    overflow: hidden;
+}
+
+div#game-floating-layer > * {
+    position: absolute;
+}
+
+div#game-static-layer {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding-left: 3vh;
-    padding-right: 3vh;
+    padding-left: calc(3 * var(--gh));
+    padding-right: calc(3 * var(--gh));
+    height: 100%;
+    width: 100%;
 }
 
 button#exit-button {
+    top: calc(3 * var(--gh));
+    left: calc(3 * var(--gh));
     padding: 0.2em 0.6em;
 }
 
-div#lunar-cards-placeholder {
-    height: 5.2vh;
+div#lunar-cards-placeholder-wrapper {
     width: 100%;
-    margin: 1.5vh 0;
+    padding: calc(3 * var(--gh)) 0;
 }
 
+div#lunar-cards-placeholder,
 div#user-cards-placeholder {
-    height: 8vh;
-    width: 100%;
+    margin: 0 auto;
 }
 
 div#game-board {
-    margin: 1.5vh auto;
+    margin: calc(1.5 * var(--gh)) auto;
+    box-sizing: border-box;
+    height: calc(28 * var(--gh));
+}
+
+svg#edges {
+    height: 100%;
 }
 
 div#lunar-score-bar,
 div#user-score-bar {
     display: flex;
+    gap: var(--gh);
+    align-items: center;
+}
+
+div#lunar-score-bar {
     justify-content: flex-end;
 }
 
-/* svg#half-moon */
+div#user-score-bar {
+    justify-content: flex-start;
+}
 
-svg#half-moon {
-    display: block;
-    position: relative;
-    width: var(--half-moon-size);
-    top: calc(var(--half-moon-size) / -2);
-    margin: 0 auto;
+span#lunar-score-text {
+    color: #acbff3;
+}
+
+span#user-score-text {
+    color: #dee7ff;
+}
+
+div#wildcards {
+    /* TBD */
+    height: calc(8 * var(--gh));
+    width: 100%;
+}
+
+div#dialogue-box {
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: black;
+    border: solid 2px white;
+    color: white;
+}
+
+/* Game floating layer */
+
+div#game-board-slots > button {
+    position: absolute;
+    background-color: #212c53;
+    border: solid 2px #3b447f;
+    border-radius: 0;
+    padding: 0;
+}
+div#game-board-slots.enabled > button {
+    cursor: pointer;
+}
+div#game-board-slots > button > svg {
+    display: none;
+    padding: 6%;
+    box-sizing: border-box;
+    height: 100%;
+    width: 100%;
+}
+div#game-board-slots.enabled > button:hover > svg {
+    display: initial;
+}
+
+div#user-hand.enabled > svg.card {
+    cursor: pointer;
+}
+
+svg#user-card-selection-box {
+    transform: scale(1.2);
+    transition: opacity 0.2s, left 0.2s ease;
+}
+
+div#stars svg.star {
+    position: absolute;
 }
 
 /* svg.card coloring */
@@ -135,7 +246,7 @@ svg.card {
     --gray-border: #3e558a;
     position: absolute;
     /* The actual position will be set dynamically. */
-    width: 8vh;
+    transform-style: preserve-3d;
 }
 
 svg.card.gray path.frame {
@@ -153,6 +264,11 @@ svg.card.white path.frame {
     fill: #7697ef;
 }
 
+svg.card.back path.frame {
+    stroke: #c8d6e1;
+    fill: url(#card-back-fill);
+}
+
 svg.card.gray .stars,
 svg.card.gray .beams {
     fill: var(--gray-border);
@@ -168,9 +284,17 @@ svg.card.white .beams {
     fill: var(--white-border);
 }
 
+svg.card .moon {
+    fill: #40578c;
+}
+svg.card.back .moon {
+    fill: rgb(150 163 191);
+}
+
 svg.card .phase,
 svg.card .stars,
-svg.card .beams {
+svg.card .beams,
+svg.card .question-mark {
     visibility: hidden;
 }
 
@@ -194,14 +318,15 @@ svg.card.waxing-gibbous .phase.waxing-gibbous,
 svg.card.waning-crescent .phase.waning-crescent,
 svg.card.final-quarter .phase.final-quarter,
 svg.card.waning-gibbous .phase.waning-gibbous,
-svg.card.full-moon .phase.full-moon {
+svg.card.full-moon .phase.full-moon,
+svg.card.back .question-mark {
     visibility: visible;
 }
 
 /* svg.star coloring */
 
 svg.star {
-    width: 2.7vh;
+    width: calc(2.7 * var(--gh));
 }
 svg.star.black path {
     fill: black;
@@ -210,6 +335,13 @@ svg.star.black path {
 svg.star.white path {
     fill: white;
     stroke: #8494c3;
+}
+
+/* svg#edges coloring */
+
+svg#edges > line {
+    stroke: #58638b;
+    stroke-width: 0.02;
 }
 
 /* General stuffs */
@@ -230,9 +362,8 @@ a:hover {
     color: #cad7ff;
 }
 
-button {
+button.ui {
     font-family: inherit;
-    font-size: inherit;
     background: linear-gradient(
         90deg,
         rgb(96 134 255) 0%,
@@ -242,7 +373,7 @@ button {
     border-style: solid;
     border-image: url("button_border.png") 30 / 0.7em / 0.1em;
 }
-button:hover {
+button.ui:hover {
     background: linear-gradient(
         90deg,
         rgb(58 104 255) 0%,
@@ -251,17 +382,17 @@ button:hover {
 }
 
 .fine-print {
-    font-size: 2.25vh;
+    font-size: calc(2.25 * var(--gh));
     color: #c6d5ff;
 }
 .size-normal {
-    font-size: 2.75vh;
+    font-size: calc(2.75 * var(--gh));
 }
 .size-large {
-    font-size: 3.25vh;
+    font-size: calc(3.25 * var(--gh));
 }
 .size-mega {
-    font-size: 4.5vh;
+    font-size: calc(4.5 * var(--gh));
 }
 .centered-text {
     text-align: center;

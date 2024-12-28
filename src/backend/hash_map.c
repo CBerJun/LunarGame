@@ -25,9 +25,8 @@ HashMap *HashMap_New(HashFunc hash, EqFunc eq) {
 void HashMap_Delete(HashMap *map) {
     for (int i = 0; i < map->capacity; ++i) {
         HashPair *node = map->buckets[i];
-        HashPair *next;
         while (node != NULL) {
-            next = node->next;
+            HashPair *next = node->next;
             free(node);
             node = next;
         }
@@ -53,9 +52,8 @@ static void map_rehash(HashMap *map) {
     map->buckets = (HashPair **) malloc(sizeof(HashPair *) * new_capacity);
     for (int i = 0; i < old_capacity; ++i) {
         HashPair *node = old_buckets[i];
-        HashPair *next;
         while (node != NULL) {
-            next = node->next;
+            HashPair *next = node->next;
             map_insert(map, node);
             node = next;
         }
