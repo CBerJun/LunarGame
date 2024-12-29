@@ -152,8 +152,10 @@ static void findLunarCycle(
     const int cur_slot = stack->slot_id;
     SlotData *data = &board->slots[cur_slot];
 #ifndef NDEBUG
-    MoonPhase next_phase = (MoonPhase)
-        ((data->phase + (forward ? 1 : -1)) % MoonPhase_NumPhases);
+    MoonPhase next_phase = (MoonPhase) (
+        (data->phase + (forward ? 1 : -1) + MoonPhase_NumPhases)
+            % MoonPhase_NumPhases
+    );
 #endif
     bool did_recurse = false;
     for (
