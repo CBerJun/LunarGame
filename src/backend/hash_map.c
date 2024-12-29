@@ -50,6 +50,9 @@ static void map_rehash(HashMap *map) {
     const int old_capacity = map->capacity;
     map->capacity = new_capacity;
     map->buckets = (HashPair **) malloc(sizeof(HashPair *) * new_capacity);
+    for (int i = 0; i < new_capacity; ++i) {
+        map->buckets[i] = NULL;
+    }
     for (int i = 0; i < old_capacity; ++i) {
         HashPair *node = old_buckets[i];
         while (node != NULL) {
