@@ -876,6 +876,7 @@ class Game {
     }
     uninstall() {
         backend._free(this.displayableBoard);
+        backend._GameBoard_Delete(this.board);
         clearChildren(edgesSvg);
         clearChildren(slotsDiv);
         clearChildren(lunarHandDiv);

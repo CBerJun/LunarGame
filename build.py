@@ -110,6 +110,7 @@ EXPORTED_C_FUNCTIONS = [
     "malloc",
     "free",
     "PatternNode_DeleteChain",
+    "GameBoard_Delete",
 ]
 
 @builder("src/frontend/backend.js", ALL_BACKEND_DEPENDENCIES)
