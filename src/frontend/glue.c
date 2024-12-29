@@ -30,13 +30,13 @@ bool EMSCRIPTEN_KEEPALIVE Glue_IsNull(void *ptr) {
 }
 
 AIDecision * EMSCRIPTEN_KEEPALIVE Glue_AIMove(
-    const GameBoard *board, const int *choices, int num_choices
+    const GameBoard *board, const int *choices, int num_choices, int depth
 ) {
     MoonPhase *new_choices = malloc(sizeof(MoonPhase) * num_choices);
     for (int i = 0; i < num_choices; ++i) {
         new_choices[i] = (MoonPhase) choices[i];
     }
-    AIDecision *res = AIMove(board, new_choices, num_choices);
+    AIDecision *res = AIMove(board, new_choices, num_choices, depth);
     free(new_choices);
     return res;
 }

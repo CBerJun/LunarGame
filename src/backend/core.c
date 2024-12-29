@@ -195,11 +195,11 @@ static void findLunarCycle(
     }
 }
 
-static Hash bitsetHashWrapper(void *bs) {
+static Hash bitsetHashWrapper(void *bs, void *meta) {
     return BitSet_Hash((BitSet *) bs);
 }
 
-static bool bitsetEqWrapper(void *bs1, void *bs2) {
+static bool bitsetEqWrapper(void *bs1, void *bs2, void *meta) {
     return BitSet_Equal((BitSet *) bs1, (BitSet *) bs2);
 }
 
@@ -293,7 +293,9 @@ PatternNode *GameBoard_PutCard(
     // vertices)
     // Delete/Transfer ownership of candidate lists as we go
     SlotsNode *c = candidates;
-    HashMap *cycles_seen = HashMap_New(bitsetHashWrapper, bitsetEqWrapper);
+    HashMap *cycles_seen = HashMap_New(
+        bitsetHashWrapper, bitsetEqWrapper, NULL
+    );
     while (c) {
         BitSet *bs = BitSet_New(board->num_slots);
         BitSet_Zero(bs);

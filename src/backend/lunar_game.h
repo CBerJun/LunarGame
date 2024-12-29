@@ -15,8 +15,8 @@ typedef struct HashPair {
     struct HashPair *next;
 } HashPair;
 
-typedef Hash (*HashFunc)(void *);
-typedef bool (*EqFunc)(void *, void *);
+typedef Hash (*HashFunc)(void *key, void *meta);
+typedef bool (*EqFunc)(void *key1, void *key2, void *meta);
 
 typedef struct HashMap {
     HashPair **buckets;  // array of linked lists of `HashPair`
@@ -24,9 +24,10 @@ typedef struct HashMap {
     int size;
     HashFunc hash;
     EqFunc eq;
+    void *meta;
 } HashMap;
 
-HashMap *HashMap_New(HashFunc hash, EqFunc eq);
+HashMap *HashMap_New(HashFunc hash, EqFunc eq, void *meta);
 void HashMap_Delete(HashMap *map);
 void HashMap_Insert(HashMap *map, void *key, void *value);
 void *HashMap_Get(const HashMap *map, void *key);
@@ -165,7 +166,7 @@ typedef struct DisplayableBoard {
     GameBoard *board;
     int x_len;
     int y_len;
-    const SlotPos *slot_pos;
+    const SlotPos *slot_pos;  /* Borrowed reference */
 } DisplayableBoard;
 
 #define NEW_PRESET_BOARD(name) \
@@ -193,12 +194,12 @@ typedef struct DisplayableBoard {
 /* ai.c */
 
 typedef struct AIDecision {
-    int choice_id;
+    int card_id;
     int slot_id;
 } AIDecision;
 
 AIDecision *AIMove(
-    const GameBoard *board, const MoonPhase *choices, int num_choices
+    const GameBoard *board, MoonPhase *choices, int num_choices, int depth
 );
 
 #endif  /* LUNAR_GAME_H */

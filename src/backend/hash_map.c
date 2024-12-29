@@ -9,10 +9,11 @@
 // After rehashing, keep that ratio under this number
 #define REHASH_TO 0.4f
 
-HashMap *HashMap_New(HashFunc hash, EqFunc eq) {
+HashMap *HashMap_New(HashFunc hash, EqFunc eq, void *meta) {
     HashMap *map = (HashMap *) malloc(sizeof(HashMap));
     map->hash = hash;
     map->eq = eq;
+    map->meta = meta;
     map->capacity = INIT_ENTRIES;
     map->size = 0;
     map->buckets = (HashPair **) malloc(sizeof(HashPair *) * INIT_ENTRIES);
@@ -37,7 +38,7 @@ void HashMap_Delete(HashMap *map) {
 
 static void map_insert(HashMap *map, HashPair *pair) {
     /* UB if `map` already has `key`. */
-    const int index = map->hash(pair->key) % map->capacity;
+    const int index = map->hash(pair->key, map->meta) % map->capacity;
     map->size++;
     HashPair **entry = &map->buckets[index];
     pair->next = *entry;
@@ -77,9 +78,9 @@ void HashMap_Insert(HashMap *map, void *key, void *value) {
 
 static HashPair *map_get(const HashMap *map, void *key) {
     /* Return NULL if not found. */
-    const int index = map->hash(key) % map->capacity;
+    const int index = map->hash(key, map->meta) % map->capacity;
     HashPair *entry = map->buckets[index];
-    while (entry != NULL && !map->eq(entry->key, key)) {
+    while (entry != NULL && !map->eq(entry->key, key, map->meta)) {
         entry = entry->next;
     }
     return entry;

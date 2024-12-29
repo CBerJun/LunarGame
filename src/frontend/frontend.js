@@ -406,10 +406,11 @@ class DisplayedStar {
 let dialogueBoxInitialized = false;
 
 class Game {
-    constructor() {
+    constructor(aiDepth, boardType) {
+        this.aiDepth = aiDepth;
         const db = backend._malloc(backendConst.DisplayableBoardSize);
         this.displayableBoard = db;
-        backend._Glue_InitDisplayableBoard(db, Boards.ThreeByFour);
+        backend._Glue_InitDisplayableBoard(db, boardType);
         this.board = backend.getValue(
             db + backendConst.DisplayableBoardBoard, '*'
         );
@@ -653,11 +654,11 @@ class Game {
             ptr += backendConst.IntSize;
         }
         const aiDecision = backend._Glue_AIMove(
-            this.board, choices, cardsInAHand
+            this.board, choices, cardsInAHand, this.aiDepth
         );
         backend._free(choices);
         const cardIndex = backend.getValue(
-            aiDecision + backendConst.AIDecisionChoiceId, int
+            aiDecision + backendConst.AIDecisionCardId, int
         );
         const slotId = backend.getValue(
             aiDecision + backendConst.AIDecisionSlotId, int
@@ -894,7 +895,7 @@ let game;
 export function onTutorial() {}
 export function onPlay() {
     enterScene("game-scene");
-    game = new Game();
+    game = new Game(4, Boards.ThreeByFour);
 }
 export function onCustomGame() {}
 export function onExitGame() {

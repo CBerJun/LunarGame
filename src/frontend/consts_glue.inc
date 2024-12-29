@@ -44,5 +44,5 @@ ITEM(PatternNodeNext, offsetof(PatternNode, next))
 ITEM(PatternOtherId, offsetof(Pattern, other_id))
 ITEM(PatternList, offsetof(Pattern, list))
 
-ITEM(AIDecisionChoiceId, offsetof(AIDecision, choice_id))
+ITEM(AIDecisionCardId, offsetof(AIDecision, card_id))
 ITEM(AIDecisionSlotId, offsetof(AIDecision, slot_id))
