@@ -187,6 +187,7 @@ const lunarCard2CardScale = 1.35;
 const lunarCardSize = cardSize / lunarCard2CardScale;
 const bonusStarInitialPad = 3;  // gh
 const bonusStarGap = 1.5  // gh
+const largeCardScale = 1.2
 
 const halfSlotButtonSize = slotButtonSize / 2;
 const halfCardSize = cardSize / 2;
@@ -839,7 +840,7 @@ class Game {
             }
             await Promise.all([
                 showDialogueBox(text),
-                this.scaleCards(occupiedSlots, 1, 1.2),
+                this.scaleCards(occupiedSlots, 1, largeCardScale),
             ]);
             await sleep(500);
             for (const slotId of occupiedSlots) {
@@ -851,7 +852,7 @@ class Game {
                 // edges
             ]);
             await this.hideStars(stars, color);
-            await this.scaleCards(occupiedSlots, 1.2, 1);
+            await this.scaleCards(occupiedSlots, largeCardScale, 1);
             if (bonus > 0) {
                 const [, stars] = await Promise.all([
                     showDialogueBox("Wildcard bonus!"),
@@ -884,15 +885,19 @@ class Game {
         }
         await sleep(1000);
         await showDialogueBox("The Half Moon's bonus points");
+        await this.scaleCards(blackIds, 1, largeCardScale);
         const stars1 = await Promise.all(blackIds.map(
             slotId => this.showStar(slotId, "black")
         ));
         await this.hideStars(stars1, "black");
+        await this.scaleCards(blackIds, largeCardScale, 1);
         await updateDialogueText("Your bonus points");
+        await this.scaleCards(whiteIds, 1, largeCardScale);
         const stars2 = await Promise.all(whiteIds.map(
             slotId => this.showStar(slotId, "white")
         ));
         await this.hideStars(stars2, "white");
+        await this.scaleCards(whiteIds, largeCardScale, 1);
         await hideDialogueBox();
         onExitGame();
     }
