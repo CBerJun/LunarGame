@@ -85,6 +85,7 @@ let backendConst = {};
 let int;
 let blackStarIcon;
 let whiteStarIcon;
+let AIMove;
 
 externalSvg("card.svg")
     .then(cardSvg2 => {
@@ -122,6 +123,11 @@ externalSvg("card.svg")
         if (int != 'i16' && int != 'i32') {
             throw "unexpected sizeof(int): " + backendConst.IntSize;
         }
+        const ptr = "number";
+        AIMove = backend.cwrap(
+            "Glue_AIMove", ptr, [ptr, ptr, "number", "number"],
+            {async: true}
+        );
         clearInterval(loadingAnimSchedule);  // Turn off animation loop
         enterScene("menu-scene");
         const record = localStorage.getItem("lunar-record");
@@ -172,6 +178,7 @@ const lunarScoreText = document.getElementById("lunar-score-text");
 const dialogueBox = document.getElementById("dialogue-box");
 const dialogueContent = document.getElementById("dialogue-content");
 const starsDiv = document.getElementById("stars");
+const exitButton = document.getElementById("exit-button");
 
 const slotButtonSize = 5.25;  // gh
 const cardSize = slotButtonSize * 1.48;
@@ -524,6 +531,7 @@ class Game {
         this.userPlayedCard = this.lunarPlayedCard = cardsInAHand - 1;
         const promises = [];
         for (let i = 0; i < cardsInAHand - 1; ++i) {
+            this.prepareLunarCard(i);
             promises.push(this.dealUserCard(i), this.dealLunarCard(i));
         }
         // User goes first
@@ -584,12 +592,15 @@ class Game {
         card.classList.add("gray", moonPhases[phase]);
         await runAnimation(150, new FlipCard2(card));
     }
-    dealLunarCard(cardIndex) {
+    prepareLunarCard(cardIndex) {
         const phase = randomPhase();
         const card = newCard();
         this.lunarHand[cardIndex] = new CardInHand(card, phase);
         card.classList.add("back");
         card.style.top = gh(this.lunarCardsY);
+    }
+    dealLunarCard(cardIndex) {
+        const card = this.lunarHand[cardIndex].element;
         lunarHandDiv.append(card);
         // Fly-in animation
         return runAnimation(400, new TranslateX(
@@ -617,6 +628,28 @@ class Game {
         userHandDiv.classList.remove("enabled");
         this.acceptUserInput = false;
         card.element.removeEventListener("click", card.onclick);
+        const patterns = backend._Glue_PutCard(
+            this.board, slotId, card.phase, backendConst.PlayerWhite
+        );
+        // As soon as the user plays their card, we could deal AI the
+        // card (internally) and let it start thinking
+        this.prepareLunarCard(this.lunarPlayedCard);
+        const aiChoices = backend._malloc(cardsInAHand * backendConst.IntSize);
+        for (let i = 0, ptr = aiChoices; i < cardsInAHand; ++i) {
+            backend.setValue(ptr, this.lunarHand[i].phase, int);
+            ptr += backendConst.IntSize;
+        }
+        this.aiPromise = AIMove(
+            this.board, aiChoices, cardsInAHand, this.aiDepth
+        );
+        this.resolvedAIDecision = null;
+        this.aiPromise.then((result) => {
+            backend._free(aiChoices);
+            this.resolvedAIDecision = result;
+        });
+        // Temporarily disable Exit button... It can lead to many
+        // unexpected things when a C function is running.
+        exitButton.setAttribute("disabled", "");
         const slot = this.slots[slotId];
         slot.card = card.element;
         slot.cardColor = "gray";
@@ -632,9 +665,6 @@ class Game {
         );
         // Move card from #user-hand to #game-board-cards
         gameBoardCardsDiv.append(card.element);
-        const patterns = backend._Glue_PutCard(
-            this.board, slotId, card.phase, backendConst.PlayerWhite
-        );
         await this.showAndDeletePatterns(patterns, slotId, "white");
         if (this.slotsFilled == this.slots.length) {
             this.endGameBonus();
@@ -645,18 +675,9 @@ class Game {
     }
     async computerRound() {
         await this.dealLunarCard(this.lunarPlayedCard);
-        const choices = backend._malloc(
-            cardsInAHand * backendConst.IntSize
-        );
-        let ptr = choices;
-        for (let i = 0; i < cardsInAHand; ++i) {
-            backend.setValue(ptr, this.lunarHand[i].phase, int);
-            ptr += backendConst.IntSize;
-        }
-        const aiDecision = backend._Glue_AIMove(
-            this.board, choices, cardsInAHand, this.aiDepth
-        );
-        backend._free(choices);
+        const aiDecision = this.resolvedAIDecision ?? (await this.aiPromise);
+        // C function has finished, resume exit button
+        exitButton.removeAttribute("disabled");
         const cardIndex = backend.getValue(
             aiDecision + backendConst.AIDecisionCardId, int
         );

@@ -373,7 +373,7 @@ button.ui {
     border-style: solid;
     border-image: url("button_border.png") 30 / 0.7em / 0.1em;
 }
-button.ui:hover {
+button.ui:enabled:hover {
     background: linear-gradient(
         90deg,
         rgb(58 104 255) 0%,

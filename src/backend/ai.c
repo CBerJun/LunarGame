@@ -93,6 +93,22 @@ static bool cacheEq(void *key1, void *key2, void *meta) {
     );
 }
 
+#ifdef LUNAR_EMCC_TAKE_A_BREAK
+// When building for Emscripten, return to JS event loop regularly when
+// running the AI as the AI takes a long time.
+
+#include <emscripten/emscripten.h>
+
+static int counter = 0;
+
+static void take_a_break(void) {
+    if (++counter >= 75) {
+        counter = 0;
+        emscripten_sleep(10);
+    }
+}
+#endif
+
 static float expectiminimax(
     const GameBoard *board,
     MoonPhase *cards,  /* We will restore after modifying it */
@@ -209,6 +225,9 @@ static float expectiminimax(
                     depth, NK_OPPONENT_TURN, NULL, cache, prev_decisions,
                     pd_ptr
                 );
+#ifdef LUNAR_EMCC_TAKE_A_BREAK
+                take_a_break();
+#endif
                 if (cacheable) {
                     if (last_layer) {
                         float *weight_ptr = (float *) malloc(sizeof(float));
@@ -268,6 +287,9 @@ weight_finished:
                     depth, NK_DRAW_MY_CARD, NULL, cache, prev_decisions,
                     pd_ptr
                 ));
+#ifdef LUNAR_EMCC_TAKE_A_BREAK
+                take_a_break();
+#endif
             }
         }
         if (res == FLT_MAX) {  // Full game board
@@ -308,7 +330,9 @@ AIDecision *AIMove(
     int num_choices,
     int depth
 ) {
-    // A dummy AI...
+#ifdef LUNAR_EMCC_TAKE_A_BREAK
+    counter = 0;
+#endif
     AIDecision *d = (AIDecision *) malloc(sizeof(AIDecision));
     expectiminimax(
         board, choices, num_choices, -1, 0,

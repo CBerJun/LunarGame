@@ -120,8 +120,10 @@ def build_backend() -> int:
     exports = ",".join("_" + x for x in EXPORTED_C_FUNCTIONS)
     return os.system(
         f"emcc -std=c99 -Wall {flags} {backend_files}"
+        " -D LUNAR_EMCC_TAKE_A_BREAK"
         f" -sEXPORTED_FUNCTIONS={exports} -sEXPORT_ES6"
-        " -sEXPORTED_RUNTIME_METHODS=getValue,setValue"
+        " -sEXPORTED_RUNTIME_METHODS=getValue,setValue,cwrap"
+        " -sASYNCIFY"
         " -o src/frontend/backend.js"
     )
 
