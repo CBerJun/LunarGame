@@ -632,25 +632,29 @@ class Game {
         const patterns = backend._Glue_PutCard(
             this.board, slotId, card.phase, backendConst.PlayerWhite
         );
-        // As soon as the user plays their card, we could deal AI the
-        // card (internally) and let it start thinking
-        this.prepareLunarCard(this.lunarPlayedCard);
-        const aiChoices = backend._malloc(cardsInAHand * backendConst.IntSize);
-        for (let i = 0, ptr = aiChoices; i < cardsInAHand; ++i) {
-            backend.setValue(ptr, this.lunarHand[i].phase, int);
-            ptr += backendConst.IntSize;
+        const isLastRound = this.slotsFilled == this.slots.length;
+        if (!isLastRound) {
+            // As soon as the user plays their card, we could deal AI the
+            // card (internally) and let it start thinking
+            this.prepareLunarCard(this.lunarPlayedCard);
+            const aiChoices =
+                backend._malloc(cardsInAHand * backendConst.IntSize);
+            for (let i = 0, ptr = aiChoices; i < cardsInAHand; ++i) {
+                backend.setValue(ptr, this.lunarHand[i].phase, int);
+                ptr += backendConst.IntSize;
+            }
+            this.aiPromise = AIMove(
+                this.board, aiChoices, cardsInAHand, this.aiDepth
+            );
+            this.resolvedAIDecision = null;
+            this.aiPromise.then((result) => {
+                backend._free(aiChoices);
+                this.resolvedAIDecision = result;
+            });
+            // Temporarily disable Exit button... It can lead to many
+            // unexpected things when a C function is running.
+            exitButton.setAttribute("disabled", "");
         }
-        this.aiPromise = AIMove(
-            this.board, aiChoices, cardsInAHand, this.aiDepth
-        );
-        this.resolvedAIDecision = null;
-        this.aiPromise.then((result) => {
-            backend._free(aiChoices);
-            this.resolvedAIDecision = result;
-        });
-        // Temporarily disable Exit button... It can lead to many
-        // unexpected things when a C function is running.
-        exitButton.setAttribute("disabled", "");
         const slot = this.slots[slotId];
         slot.card = card.element;
         slot.cardColor = "gray";
@@ -667,7 +671,7 @@ class Game {
         // Move card from #user-hand to #game-board-cards
         gameBoardCardsDiv.append(card.element);
         await this.showAndDeletePatterns(patterns, slotId, "white");
-        if (this.slotsFilled == this.slots.length) {
+        if (isLastRound) {
             this.endGameBonus();
         }
         else {
