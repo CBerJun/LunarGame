@@ -145,8 +145,11 @@ externalSvg("card.svg")
             "Oops... An error occurred when loading the game: " + reason
     });
 
-function hashPos(arr) {
-    return `${arr[0]},${arr[1]}`;
+function hashEdge(id1, id2) {
+    if (id1 > id2) {
+        [id1, id2] = [id2, id1];
+    }
+    return `${id1},${id2}`;
 }
 
 function svgNode(tag) {
@@ -154,10 +157,11 @@ function svgNode(tag) {
 }
 
 class RenderedEdge {
-    constructor(element, pos1, pos2) {
-        this.element = element;
+    constructor(pos1, pos2, slot1Id) {
         this.pos1 = pos1;
         this.pos2 = pos2;
+        this.slot1Id = slot1Id;
+        this.symbol = null;
     }
 }
 
@@ -349,6 +353,19 @@ class FlipCard2 extends RotateY {
         super(element, 90, 0, easingFunc);
     }
 }
+class DrawLine extends Animation {
+    constructor(svgLine, pos1, pos2, easingFunc=linear) {
+        super(easingFunc);
+        this.svgLine = svgLine;
+        [this.x, this.y] = pos1;
+        this.dx = pos2[0] - pos1[0];
+        this.dy = pos2[1] - pos1[1];
+    }
+    run(progress) {
+        this.svgLine.setAttribute("x2", this.x + this.dx * progress);
+        this.svgLine.setAttribute("y2", this.y + this.dy * progress);
+    }
+}
 
 function runAnimation(durationMs, ...animations) {
     function invokeAnimations(progress) {
@@ -413,6 +430,13 @@ class DisplayedStar {
 
 let dialogueBoxInitialized = false;
 
+function newLunarCycleSymbol() {
+    const node = svgNode("line");
+    node.classList.add("lunar-cycle-symbol");
+    edgesSvg.append(node);
+    return node;
+}
+
 class Game {
     constructor(aiDepth, boardType) {
         this.aiDepth = aiDepth;
@@ -449,13 +473,20 @@ class Game {
         // Render the board
         const numSlots = backend.getValue(
             this.board + backendConst.GameBoardNumSlots, int
-        )
-        const xLen = backend.getValue(
-            db + backendConst.DisplayableBoardXLen, int
         );
-        const yLen = backend.getValue(
+        const yLenNoPadding = backend.getValue(
             db + backendConst.DisplayableBoardYLen, int
         );
+        this.eshToSvgPx = yLenNoPadding / 100;
+        edgesSvg.style.setProperty("--esh", String(this.eshToSvgPx));
+        // Q is the extra padding in edges SVG so that the phase pair or
+        // half moon symbols aren't cut out of the SVG for edges that
+        // are near the SVG border.
+        const Q = 5 * this.eshToSvgPx;
+        const xLen = backend.getValue(
+            db + backendConst.DisplayableBoardXLen, int
+        ) + 2 * Q;
+        const yLen = yLenNoPadding + 2 * Q;
         let slotPosPtr = backend.getValue(
             db + backendConst.DisplayableBoardSlotPos, '*'
         );
@@ -467,22 +498,24 @@ class Game {
             ]);
             slotPosPtr += backendConst.SlotPosSize;
         }
-        edgesSvg.setAttribute("viewBox", `0 0 ${xLen} ${yLen}`);
+        edgesSvg.setAttribute("viewBox", [-Q, -Q, xLen, yLen].join(" "));
         let adjPtr = backend.getValue(
             this.board + backendConst.GameBoardAdj, '*'
         );
         this.edges = new Map();  // `${x},${y}` -> <line> element
         this.slots = [];
         const svgRect = edgesSvg.getBoundingClientRect();
-        const svgOffsetX = (svgRect.x - floatingLayerRect.x) * px2gh;
-        const svgOffsetY = (svgRect.y - floatingLayerRect.y) * px2gh;
         const scaleX = svgRect.width / xLen * px2gh;
         const scaleY = svgRect.height / yLen * px2gh;
+        const edgesOffsetX = (svgRect.x - floatingLayerRect.x) * px2gh
+            + Q * scaleX;
+        const edgesOffsetY = (svgRect.y - floatingLayerRect.y) * px2gh
+            + Q * scaleY;
         for (let i = 0; i < numSlots; ++i) {
             const p1 = slotPos[i];
             // Vertex
-            const centerPosX = svgOffsetX + scaleX * p1[0];
-            const centerPosY = svgOffsetY + scaleY * p1[1];
+            const centerPosX = edgesOffsetX + scaleX * p1[0];
+            const centerPosY = edgesOffsetY + scaleY * p1[1];
             this.slots.push(new BoardSlot(centerPosX, centerPosY));
             const button = document.createElement("button");
             button.type = "button";
@@ -496,12 +529,7 @@ class Game {
             button.style.top = gh(centerPosY - halfSlotButtonSize);
             const buttonIndicator = svgNode("svg");
             const indicatorRect = svgNode("rect");
-            indicatorRect.setAttribute("fill", "none");
-            indicatorRect.setAttribute("stroke", "white");
-            indicatorRect.setAttribute("stroke-width", "3");
-            indicatorRect.setAttribute("stroke-dasharray", "8 4");
-            indicatorRect.setAttribute("height", "100%");
-            indicatorRect.setAttribute("width", "100%");
+            indicatorRect.classList.add("slot-indicator");
             buttonIndicator.append(indicatorRect);
             button.append(buttonIndicator);
             slotsDiv.append(button);
@@ -511,7 +539,7 @@ class Game {
                 const slotId = backend.getValue(
                     node + backendConst.SlotNodeSlotId, int
                 );
-                const hash = hashPos([slotId, i].sort());
+                const hash = hashEdge(slotId, i);
                 if (!this.edges.has(hash)) {
                     const p2 = slotPos[slotId];
                     const line = svgNode("line");
@@ -519,7 +547,7 @@ class Game {
                     line.setAttribute("y1", String(p1[1]));
                     line.setAttribute("x2", String(p2[0]));
                     line.setAttribute("y2", String(p2[1]));
-                    this.edges.set(hash, new RenderedEdge(line, p1, p2));
+                    this.edges.set(hash, new RenderedEdge(p1, p2, i));
                     edgesSvg.append(line);
                 }
                 node = backend.getValue(node + backendConst.SlotNodeNext, '*');
@@ -747,13 +775,27 @@ class Game {
         await runAnimation(150, new FadeIn(star));
         return new DisplayedStar(star, x, y);
     }
-    async showStar(slotId, color) {
+    showStar(slotId, color) {
         const slot = this.slots[slotId];
-        return await this.showStarAt(
+        return this.showStarAt(
             slot.centerPosXGh - halfCardSize,
             slot.centerPosYGh - halfCardSize,
             color
         );
+    }
+    async showStars(slotIds, color, oneByOne=false) {
+        if (oneByOne) {
+            const stars = [];
+            for (const slotId of slotIds) {
+                stars.push(await this.showStar(slotId, color));
+            }
+            return stars;
+        }
+        else {
+            return await Promise.all(slotIds.map(
+                slotId => this.showStar(slotId, color)
+            ));
+        }
     }
     async hideStars(stars, color) {
         // stars is `DisplayedStar[]`
@@ -790,6 +832,52 @@ class Game {
         }
         return Promise.all(promises);
     }
+    fullMoonSymbol(slot1, slot2) {
+        const edge = this.edges.get(hashEdge(slot1, slot2));
+        const symbol = svgNode("circle");
+        edge.symbol = symbol;
+        symbol.classList.add("full-moon-symbol");
+        const [x1, y1] = edge.pos1;
+        const [x2, y2] = edge.pos2;
+        symbol.setAttribute("cx", (x1 + x2) / 2);
+        symbol.setAttribute("cy", (y1 + y2) / 2);
+        edgesSvg.append(symbol);
+        return symbol;
+    }
+    phasePairSymbol(slot1, slot2) {
+        const edge = this.edges.get(hashEdge(slot1, slot2));
+        const symbol = svgNode("g");
+        edge.symbol = symbol;
+        symbol.classList.add("phase-pair-symbol");
+        const [x1, y1] = edge.pos1;
+        const [x2, y2] = edge.pos2;
+        let [nx, ny] = [y1 - y2, x2 - x1];  // Normal vector
+        const magnitude = Math.sqrt(nx * nx + ny * ny);
+        nx /= magnitude;
+        ny /= magnitude;
+        const cx = (x1 + x2) / 2;
+        const cy = (y1 + y2) / 2;
+        const positiveOffset = 2 * this.eshToSvgPx;
+        for (const offset of [positiveOffset, -positiveOffset]) {
+            const circle = svgNode("circle");
+            circle.setAttribute("cx", cx + nx * offset);
+            circle.setAttribute("cy", cy + ny * offset);
+            symbol.append(circle);
+        }
+        edgesSvg.append(symbol);
+        return symbol;
+    }
+    lunarCycleSymbol(startSlot, endSlot) {
+        const edge = this.edges.get(hashEdge(startSlot, endSlot));
+        const symbol = edge.symbol ?? (edge.symbol = newLunarCycleSymbol());
+        let [p1, p2] = [edge.pos1, edge.pos2];
+        if (startSlot != edge.slot1Id) {
+            [p1, p2] = [p2, p1];
+        }
+        symbol.setAttribute("x1", p1[0]);
+        symbol.setAttribute("y1", p1[1]);
+        return [symbol, p1, p2];
+    }
     async showAndDeletePatterns(patterns, subjectSlot, color) {
         let node = patterns;
         while (!backend._Glue_IsNull(node)) {
@@ -799,7 +887,9 @@ class Game {
             const kind = backend._Glue_PatternKind(pattern);
             let text;
             let starredSlots;
+            let showStarsOneByOne = false;
             const occupiedSlots = [];
+            const edgeAnimations = [];
             let bonus = 0;
             switch (kind) {
             case backendConst.PkPhasePair: {
@@ -809,6 +899,9 @@ class Game {
                 );
                 starredSlots = [subjectSlot];
                 occupiedSlots.push(subjectSlot, otherId);
+                edgeAnimations.push(new FadeIn(
+                    this.phasePairSymbol(subjectSlot, otherId)
+                ));
                 break;
             }
             case backendConst.PkFullMoon: {
@@ -818,22 +911,34 @@ class Game {
                 );
                 starredSlots = occupiedSlots;
                 occupiedSlots.push(subjectSlot, otherId);
+                edgeAnimations.push(new FadeIn(
+                    this.fullMoonSymbol(subjectSlot, otherId)
+                ));
                 break;
             }
             case backendConst.PkLunarCycle: {
                 let node = backend.getValue(
                     pattern + backendConst.PatternList, '*'
                 );
+                let lastSlot = null;
                 while (!backend._Glue_IsNull(node)) {
-                    occupiedSlots.push(backend.getValue(
+                    const thisSlot = backend.getValue(
                         node + backendConst.SlotNodeSlotId, int
-                    ));
+                    );
+                    occupiedSlots.push(thisSlot);
+                    if (lastSlot != null) {
+                        edgeAnimations.push(new DrawLine(
+                            ...this.lunarCycleSymbol(lastSlot, thisSlot)
+                        ));
+                    }
+                    lastSlot = thisSlot;
                     node = backend.getValue(
                         node + backendConst.SlotNodeNext, '*'
                     );
                 }
                 starredSlots = occupiedSlots;
                 text = `Lunar Cycle of ${occupiedSlots.length}`;
+                showStarsOneByOne = true;
                 break;
             }
             default:
@@ -841,6 +946,10 @@ class Game {
             }
             for (const slotId of occupiedSlots) {
                 this.slots[slotId].setCardColor("gray");
+            }
+            // Set animations to initial states
+            for (const animation of edgeAnimations) {
+                animation.run(0);
             }
             await Promise.all([
                 showDialogueBox(text),
@@ -850,10 +959,14 @@ class Game {
             for (const slotId of occupiedSlots) {
                 this.slots[slotId].setCardColor(color);
             }
-            const [, ...stars] = await Promise.all([
+            const [stars] = await Promise.all([
+                this.showStars(starredSlots, color, showStarsOneByOne),
                 hideDialogueBox(),
-                ...starredSlots.map(slotId => this.showStar(slotId, color)),
-                // edges
+                (async () => {
+                    for (const a of edgeAnimations) {
+                        await runAnimation(150, a);
+                    }
+                })(),
             ]);
             await this.hideStars(stars, color);
             await this.scaleCards(occupiedSlots, largeCardScale, 1);
@@ -890,16 +1003,12 @@ class Game {
         await sleep(1000);
         await showDialogueBox("The Half Moon's bonus points");
         await this.scaleCards(blackIds, 1, largeCardScale);
-        const stars1 = await Promise.all(blackIds.map(
-            slotId => this.showStar(slotId, "black")
-        ));
+        const stars1 = await this.showStars(blackIds, "black");
         await this.hideStars(stars1, "black");
         await this.scaleCards(blackIds, largeCardScale, 1);
         await updateDialogueText("Your bonus points");
         await this.scaleCards(whiteIds, 1, largeCardScale);
-        const stars2 = await Promise.all(whiteIds.map(
-            slotId => this.showStar(slotId, "white")
-        ));
+        const stars2 = await this.showStars(whiteIds, "white");
         await this.hideStars(stars2, "white");
         await this.scaleCards(whiteIds, largeCardScale, 1);
         await hideDialogueBox();

@@ -339,9 +339,41 @@ svg.star.white path {
 
 /* svg#edges coloring */
 
+/* The variable --esh (Edges SVG Height) is set in JS dynamically. */
+
 svg#edges > line {
     stroke: #58638b;
-    stroke-width: 0.02;
+    stroke-width: var(--esh);
+}
+
+circle.full-moon-symbol {
+    fill: white;
+    r: calc(1.8 * var(--esh));
+}
+
+g.phase-pair-symbol {
+    stroke: white;
+    stroke-width: calc(0.6 * var(--esh));
+    fill: none;
+}
+g.phase-pair-symbol > circle {
+    r: calc(1.2 * var(--esh));
+}
+
+svg#edges > line.lunar-cycle-symbol {
+    stroke: white;
+    stroke-width: calc(2 * var(--esh));
+}
+
+/* Slot indicator SVG */
+
+rect.slot-indicator {
+    fill: none;
+    stroke: white;
+    stroke-width: 3;
+    stroke-dasharray: 8 4;
+    height: 100%;
+    width: 100%;
 }
 
 /* General stuffs */
