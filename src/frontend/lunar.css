@@ -199,6 +199,11 @@ div#dialogue-box {
     align-items: center;
     background-color: black;
     border: solid 2px white;
+    padding: 0 0.5em;
+    color: #b3bfff;
+}
+
+span.emphasized-text {
     color: white;
 }
 
@@ -211,18 +216,21 @@ div#game-board-slots > button {
     border-radius: 0;
     padding: 0;
 }
-div#game-board-slots.enabled > button {
+div#game-board-slots.enabled > button,
+div#game-board-slots > button.forced {
     cursor: pointer;
 }
 div#game-board-slots > button > svg {
-    display: none;
     padding: 6%;
     box-sizing: border-box;
     height: 100%;
     width: 100%;
+    opacity: 0;
+    transition: opacity 0.2s;
 }
-div#game-board-slots.enabled > button:hover > svg {
-    display: initial;
+div#game-board-slots.enabled > button:hover > svg,
+div#game-board-slots > button.forced > svg {
+    opacity: 1;
 }
 
 div#user-hand.enabled > svg.card {

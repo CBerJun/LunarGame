@@ -165,8 +165,6 @@ class RenderedEdge {
     }
 }
 
-const cardsInAHand = 3;
-
 const gameSceneDiv = document.getElementById("game-scene");
 const edgesSvg = document.getElementById("edges");
 const slotsDiv = document.getElementById("game-board-slots");
@@ -213,11 +211,11 @@ div#game-board {
 }
 div#user-cards-placeholder {
     height: ${gh(cardSize)};
-    width: ${gh(cardsInAHand * (cardSize + cardGap) - cardGap)};
+    /* width is dynamic */
 }
 div#lunar-cards-placeholder {
     height: ${gh(lunarCardSize)};
-    width: ${gh(cardsInAHand * (lunarCardSize + cardGap) - cardGap)};
+    /* width is dynamic */
 }
 div#user-hand > svg.card,
 div#game-board-cards > svg.card {
@@ -248,9 +246,10 @@ function showDialogueBox(text) {
     return runAnimation(200, new FadeIn(dialogueBox));
 }
 
-async function updateDialogueText(text) {
+async function updateDialogueText(...components) {
     await runAnimation(100, new FadeOut(dialogueContent));
-    dialogueContent.textContent = text;
+    clearChildren(dialogueContent);
+    dialogueContent.append(...components);
     await runAnimation(100, new FadeIn(dialogueContent));
 }
 
@@ -405,9 +404,10 @@ class CardInHand {
 }
 
 class BoardSlot {
-    constructor(centerPosXGh, centerPosYGh) {
+    constructor(centerPosXGh, centerPosYGh, button) {
         this.centerPosXGh = centerPosXGh;
         this.centerPosYGh = centerPosYGh;
+        this.button = button;
         this.card = null;
         this.cardColor = null;
     }
@@ -438,15 +438,24 @@ function newLunarCycleSymbol() {
 }
 
 class Game {
-    constructor(aiDepth, boardType) {
+    constructor(aiDepth, boardType, cardsInAHand) {
         this.aiDepth = aiDepth;
+        this.cardsInAHand = cardsInAHand;
         const db = backend._malloc(backendConst.DisplayableBoardSize);
         this.displayableBoard = db;
         backend._Glue_InitDisplayableBoard(db, boardType);
         this.board = backend.getValue(
             db + backendConst.DisplayableBoardBoard, '*'
         );
+        this.userCardSelection = null;
         this.acceptUserInput = false;
+        // Resize the placeholders
+        userCardsDiv.style.width = gh(
+            cardsInAHand * (cardSize + cardGap) - cardGap
+        );
+        lunarCardsDiv.style.width = gh(
+            cardsInAHand * (lunarCardSize + cardGap) - cardGap
+        );
         // Coordinate manipulation for the floating layer
         const px2gh = 100 / gameSceneDiv.clientHeight;
         const floatingLayerRect = gameFloatingLayerDiv.getBoundingClientRect();
@@ -516,8 +525,8 @@ class Game {
             // Vertex
             const centerPosX = edgesOffsetX + scaleX * p1[0];
             const centerPosY = edgesOffsetY + scaleY * p1[1];
-            this.slots.push(new BoardSlot(centerPosX, centerPosY));
             const button = document.createElement("button");
+            this.slots.push(new BoardSlot(centerPosX, centerPosY, button));
             button.type = "button";
             button.addEventListener("click", (event) => {
                 if (!this.acceptUserInput) {
@@ -558,13 +567,6 @@ class Game {
         this.userHand = new Array(cardsInAHand).fill(null);
         this.lunarHand = new Array(cardsInAHand).fill(null);
         this.userPlayedCard = this.lunarPlayedCard = cardsInAHand - 1;
-        const promises = [];
-        for (let i = 0; i < cardsInAHand - 1; ++i) {
-            this.prepareLunarCard(i);
-            promises.push(this.dealUserCard(i), this.dealLunarCard(i));
-        }
-        // User goes first
-        Promise.all(promises).then(this.userRound.bind(this));
         // Misc...
         this.slotsFilled = 0;
         this.lunarScore = this.userScore = 0;
@@ -577,6 +579,31 @@ class Game {
         const whiteStarRect = whiteStarIcon.getBoundingClientRect();
         this.whiteStarIconX = (whiteStarRect.x - floatingLayerRect.x) * px2gh;
         this.whiteStarIconY = (whiteStarRect.y - floatingLayerRect.y) * px2gh;
+    }
+    showDialogueBox(text) {  // override-able
+        return showDialogueBox(text);
+    }
+    hideDialogueBox() {  // override-able
+        return hideDialogueBox();
+    }
+    async controller() {  // override-able
+        await this.drawInitialCards();
+        // User goes first
+        let userRound = true;
+        while (this.slotsFilled != this.slots.length) {
+            await (userRound ? this.userRound() : this.computerRound());
+            userRound = !userRound;
+        }
+        await this.endGameBonus();
+        this.uninstall();
+    }
+    drawInitialCards() {
+        const promises = [];
+        for (let i = 0; i < this.cardsInAHand - 1; ++i) {
+            this.prepareLunarCard(i);
+            promises.push(this.dealUserCard(i), this.dealLunarCard(i));
+        }
+        return Promise.all(promises);
     }
     userCardX(cardIndex) {
         return this.userCardsX + cardIndex * (cardSize + cardGap);
@@ -597,8 +624,10 @@ class Game {
             cardSelectionBox.style.left = gh(this.userCardX(cardIndex));
         }
     }
-    async dealUserCard(cardIndex) {
-        const phase = randomPhase();
+    async dealUserCard(cardIndex, phase=null) {
+        if (phase == null) {
+            phase = randomPhase();
+        }
         const card = newCard();
         const onclick = (event) => {
             if (!this.acceptUserInput) {
@@ -621,8 +650,10 @@ class Game {
         card.classList.add("gray", moonPhases[phase]);
         await runAnimation(150, new FlipCard2(card));
     }
-    prepareLunarCard(cardIndex) {
-        const phase = randomPhase();
+    prepareLunarCard(cardIndex, phase=null) {
+        if (phase == null) {
+            phase = randomPhase();
+        }
         const card = newCard();
         this.lunarHand[cardIndex] = new CardInHand(card, phase);
         card.classList.add("back");
@@ -637,51 +668,72 @@ class Game {
             this.lunarCardX(cardIndex)
         ));
     }
-    async userRound() {
+    async enableUserInput() {  // override-able
         await this.dealUserCard(this.userPlayedCard);
         // Allow user to pick a card and place it
         slotsDiv.classList.add("enabled");
         userHandDiv.classList.add("enabled");
+    }
+    async userRound(onRecvUserMove=null) {
         this.acceptUserInput = true;
+        await this.enableUserInput();
         // Select the middle card by default
-        this.userCardSelection = null;
-        this.updateUserCardSelection(Math.floor(cardsInAHand / 2));
+        this.updateUserCardSelection(Math.floor(this.cardsInAHand / 2));
+        // Wait for user input
+        await new Promise(resolve => {
+            this.userPlaceCardControllerCallback = resolve;
+            this.onRecvUserMove = onRecvUserMove;
+        });
+    }
+    disableUserInput(slotId) {  // override-able
+        slotsDiv.classList.remove("enabled");
+        userHandDiv.classList.remove("enabled");
+    }
+    computerStartThinking() {  // override-able
+        this.prepareLunarCard(this.lunarPlayedCard);
+        const aiChoices =
+            backend._malloc(this.cardsInAHand * backendConst.IntSize);
+        for (let i = 0, ptr = aiChoices; i < this.cardsInAHand; ++i) {
+            backend.setValue(ptr, this.lunarHand[i].phase, int);
+            ptr += backendConst.IntSize;
+        }
+        this.aiPromise = AIMove(
+            this.board, aiChoices, this.cardsInAHand, this.aiDepth
+        );
+        this.resolvedAIDecision = null;
+        this.aiPromise.then((result) => {
+            backend._free(aiChoices);
+            this.resolvedAIDecision = result;
+        });
+        // Temporarily disable Exit button... It can lead to many
+        // unexpected things when a C function is running.
+        exitButton.setAttribute("disabled", "");
+    }
+    filterSlot(slotId) {  // override-able
+        return false;
     }
     async onUserPlaceCard(slotId) {
+        if (this.filterSlot(slotId)) {
+            return;
+        }
+        if (this.onRecvUserMove != null) {
+            await this.onRecvUserMove();
+        }
         ++this.slotsFilled;
         const card = this.userHand[this.userCardSelection];
         this.userHand[this.userCardSelection] = null;
         this.userPlayedCard = this.userCardSelection;
         this.updateUserCardSelection(null);
-        slotsDiv.classList.remove("enabled");
-        userHandDiv.classList.remove("enabled");
+        this.disableUserInput(slotId);
         this.acceptUserInput = false;
         card.element.removeEventListener("click", card.onclick);
         const patterns = backend._Glue_PutCard(
             this.board, slotId, card.phase, backendConst.PlayerWhite
         );
-        const isLastRound = this.slotsFilled == this.slots.length;
-        if (!isLastRound) {
-            // As soon as the user plays their card, we could deal AI the
-            // card (internally) and let it start thinking
-            this.prepareLunarCard(this.lunarPlayedCard);
-            const aiChoices =
-                backend._malloc(cardsInAHand * backendConst.IntSize);
-            for (let i = 0, ptr = aiChoices; i < cardsInAHand; ++i) {
-                backend.setValue(ptr, this.lunarHand[i].phase, int);
-                ptr += backendConst.IntSize;
-            }
-            this.aiPromise = AIMove(
-                this.board, aiChoices, cardsInAHand, this.aiDepth
-            );
-            this.resolvedAIDecision = null;
-            this.aiPromise.then((result) => {
-                backend._free(aiChoices);
-                this.resolvedAIDecision = result;
-            });
-            // Temporarily disable Exit button... It can lead to many
-            // unexpected things when a C function is running.
-            exitButton.setAttribute("disabled", "");
+        if (this.slotsFilled != this.slots.length) {
+            // As soon as the user plays their card, we could deal AI
+            // the card (internally) and let it start thinking
+            this.computerStartThinking();
         }
         const slot = this.slots[slotId];
         slot.card = card.element;
@@ -699,15 +751,9 @@ class Game {
         // Move card from #user-hand to #game-board-cards
         gameBoardCardsDiv.append(card.element);
         await this.showAndDeletePatterns(patterns, slotId, "white");
-        if (isLastRound) {
-            this.endGameBonus();
-        }
-        else {
-            this.computerRound();
-        }
+        this.userPlaceCardControllerCallback();
     }
-    async computerRound() {
-        await this.dealLunarCard(this.lunarPlayedCard);
+    async computerDecisionRequired() {  // override-able
         const aiDecision = this.resolvedAIDecision ?? (await this.aiPromise);
         // C function has finished, resume exit button
         exitButton.removeAttribute("disabled");
@@ -718,6 +764,11 @@ class Game {
             aiDecision + backendConst.AIDecisionSlotId, int
         );
         backend._free(aiDecision);
+        return [cardIndex, slotId];
+    }
+    async computerRound() {
+        await this.dealLunarCard(this.lunarPlayedCard);
+        const [cardIndex, slotId] = await this.computerDecisionRequired();
         ++this.slotsFilled;
         const card = this.lunarHand[cardIndex];
         const slot = this.slots[slotId];
@@ -754,12 +805,6 @@ class Game {
             this.board, slotId, card.phase, backendConst.PlayerBlack
         );
         await this.showAndDeletePatterns(patterns, slotId, "black");
-        if (this.slotsFilled == this.slots.length) {
-            this.endGameBonus();
-        }
-        else {
-            this.userRound();
-        }
     }
     scaleCards(slotIds, from, to) {
         return Promise.all(slotIds.map(slotId => runAnimation(
@@ -952,7 +997,7 @@ class Game {
                 animation.run(0);
             }
             await Promise.all([
-                showDialogueBox(text),
+                this.showDialogueBox(text),
                 this.scaleCards(occupiedSlots, 1, largeCardScale),
             ]);
             await sleep(500);
@@ -961,7 +1006,7 @@ class Game {
             }
             const [stars] = await Promise.all([
                 this.showStars(starredSlots, color, showStarsOneByOne),
-                hideDialogueBox(),
+                this.hideDialogueBox(),
                 (async () => {
                     for (const a of edgeAnimations) {
                         await runAnimation(150, a);
@@ -972,12 +1017,12 @@ class Game {
             await this.scaleCards(occupiedSlots, largeCardScale, 1);
             if (bonus > 0) {
                 const [, stars] = await Promise.all([
-                    showDialogueBox("Wildcard bonus!"),
+                    this.showDialogueBox("Wildcard bonus!"),
                     this.showBonusStars(bonus, color),
                 ]);
                 await sleep(500);
                 await Promise.all([
-                    hideDialogueBox(),
+                    this.hideDialogueBox(),
                     this.hideStars(stars, color),
                 ]);
             }
@@ -1001,18 +1046,16 @@ class Game {
             }
         }
         await sleep(1000);
-        await showDialogueBox("The Half Moon's bonus points");
+        await this.showDialogueBox("End Bonus Points");
         await this.scaleCards(blackIds, 1, largeCardScale);
         const stars1 = await this.showStars(blackIds, "black");
         await this.hideStars(stars1, "black");
         await this.scaleCards(blackIds, largeCardScale, 1);
-        await updateDialogueText("Your bonus points");
         await this.scaleCards(whiteIds, 1, largeCardScale);
         const stars2 = await this.showStars(whiteIds, "white");
         await this.hideStars(stars2, "white");
         await this.scaleCards(whiteIds, largeCardScale, 1);
-        await hideDialogueBox();
-        onExitGame();
+        await this.hideDialogueBox();
     }
     uninstall() {
         backend._free(this.displayableBoard);
@@ -1029,12 +1072,185 @@ class Game {
     }
 }
 
+function emphasizedText(text) {
+    const element = document.createElement("span");
+    element.textContent = text;
+    element.classList.add("emphasized-text");
+    element.classList.add("size-large");
+    return element;
+}
+
+class TutorialGame extends Game {
+    constructor() {
+        super(-1, Boards.ThreeByThree, 1);
+    }
+    showDialogueBox(text) {  // override
+        return Promise.resolve();
+    }
+    hideDialogueBox() {  // override
+        return Promise.resolve();
+    }
+    async controller() {  // override
+        await showDialogueBox(
+            "You're playing against the Half Moon. You'll take turns placing"
+            + " moon cards on the board competing to score the most points."
+        );
+        await sleep(6000);
+        // Computer goes first in tutorial
+        this.lunarForceOp = {phase: 1, slotId: 0};
+        this.computerStartThinking();
+        await Promise.all([
+            updateDialogueText(
+                "It's your turn. Place a card next to this one with the"
+                + " matching moon phase to make a ",
+                emphasizedText("PHASE PAIR"),
+                ".",
+            ),
+            this.computerRound(),
+        ]);
+        this.userForceOp = {phase: 1, slotId: 1};
+        this.lunarForceOp = {phase: 6, slotId: 3};
+        await this.userRound(async () => {
+            updateDialogueText(
+                "Great Job! You created a ",
+                emphasizedText("PHASE PAIR"),
+                " worth one point.",
+            );
+        });
+        await sleep(3000);
+        await updateDialogueText(
+            "But ",
+            emphasizedText("PHASE PAIRS"),
+            " aren't the only matches you can make...",
+        );
+        await sleep(4000);
+        await Promise.all([
+            updateDialogueText(
+                "Now, place the opposite phase card to create a ",
+                emphasizedText("FULL MOON PAIR"),
+                ".",
+            ),
+            this.computerRound(),
+        ]);
+        this.userForceOp = {phase: 2, slotId: 4};
+        this.lunarForceOp = {phase: 0, slotId: 6};
+        await this.userRound(async () => {
+            updateDialogueText(
+                "Stellar! Opposite phase cards make a ",
+                emphasizedText("FULL MOON PAIR"),
+                " worth two points.",
+            );
+        });
+        await sleep(3000);
+        await updateDialogueText(
+            "Besides pairs, you can also connect the phases to each"
+            + " other for more points...",
+        );
+        await sleep(4000);
+        await this.computerRound();
+        this.lunarForceOp = {phase: 6, slotId: 8};
+        this.computerStartThinking();
+        await this.computerRound();
+        await updateDialogueText(
+            "Place the missing phase card to connect all three cards in a ",
+            emphasizedText("LUNAR CYCLE"),
+            ".",
+        );
+        this.userForceOp = {phase: 7, slotId: 7};
+        this.lunarForceOp = {phase: 5, slotId: 5};
+        await this.userRound(async () => {
+            updateDialogueText(
+                "Nice work! You created a ",
+                emphasizedText("LUNAR CYCLE"),
+                " of three cards worth three points.",
+            );
+        });
+        await sleep(3000);
+        await updateDialogueText(
+            "But ",
+            emphasizedText("LUNAR CYCLES"),
+            " can be longer than three cards...",
+        );
+        await sleep(4000);
+        await Promise.all([
+            this.computerRound(),
+            updateDialogueText(
+                "Oh no, the Half Moon has stolen your ",
+                emphasizedText("LUNAR CYCLE"),
+                "! It's now four cards long and the Moon scores four points.",
+            ),
+        ]);
+        await sleep(3000);
+        this.userForceOp = {phase: 4, slotId: 2};
+        await updateDialogueText(
+            "Add a card to the ",
+            emphasizedText("LUNAR CYCLE"),
+            " to extend it again and claim them back!",
+        );
+        await this.userRound(async () => {
+            updateDialogueText(
+                "You did it! The cards are yours again and you get five"
+                + " more points for a five card ",
+                emphasizedText("LUNAR CYCLE"),
+                ".",
+            );
+        });
+        await sleep(3000);
+        await updateDialogueText(
+            "The game ends when the board is completely filled with cards.",
+        );
+        await sleep(3000);
+        await Promise.all([
+            updateDialogueText(
+                "Both players receive a bonus point for each card they"
+                + " have claimed on the final board.",
+            ),
+            this.endGameBonus(),
+        ]);
+        await sleep(3000);
+        await hideDialogueBox();
+        this.uninstall();
+    }
+    async enableUserInput() {  // override
+        await this.dealUserCard(0, this.userForceOp.phase);
+        // Force user to play the card at a certain slot
+        this.slots[this.userForceOp.slotId].button.classList.add("forced");
+        userHandDiv.classList.add("enabled");
+    }
+    filterSlot(slotId) {  // override
+        return slotId != this.userForceOp.slotId;
+    }
+    disableUserInput(slotId) {  // override
+        this.slots[slotId].button.classList.remove("forced");
+        userHandDiv.classList.remove("enabled");
+    }
+    computerStartThinking() {  // override
+        const force = this.lunarForceOp;
+        this.prepareLunarCard(0, force.phase);
+        this.aiDecision = [0, force.slotId];
+    }
+    async computerDecisionRequired() {  // override
+        return this.aiDecision;
+    }
+}
+
 let game;
 
-export function onTutorial() {}
+export function onTutorial() {
+    enterScene("game-scene");
+    game = new TutorialGame();
+    game.controller().then(() => {
+        game = undefined;  // For GC
+        enterScene("menu-scene");
+    });
+}
 export function onPlay() {
     enterScene("game-scene");
-    game = new Game(4, Boards.ThreeByFour);
+    game = new Game(4, Boards.Tree, 3);
+    game.controller().then(() => {
+        game = undefined;  // For GC
+        enterScene("menu-scene");
+    });
 }
 export function onCustomGame() {}
 export function onExitGame() {
