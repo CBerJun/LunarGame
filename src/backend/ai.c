@@ -102,9 +102,9 @@ static bool cacheEq(void *key1, void *key2, void *meta) {
 static int counter = 0;
 
 static void take_a_break(void) {
-    if (++counter >= 75) {
+    if (++counter >= 30) {
         counter = 0;
-        emscripten_sleep(10);
+        emscripten_sleep(1);
     }
 }
 #endif
