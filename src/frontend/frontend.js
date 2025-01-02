@@ -237,24 +237,40 @@ function randomPhase() {
     return Math.floor(Math.random() * moonPhases.length);
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+const ABORTED = new Error("ABORTED");
+
+function sleep(ms, abortSignal=null) {
+    return new Promise((resolve, reject) => {
+        const onAbort = () => {
+            clearTimeout(timeOutToken);
+            reject(ABORTED);
+        };
+        const timeOutToken = setTimeout(() => {
+            if (abortSignal != null) {
+                abortSignal.removeEventListener("abort", onAbort);
+            }
+            resolve(undefined);
+        }, ms);
+        if (abortSignal != null) {
+            abortSignal.addEventListener("abort", onAbort);
+        }
+    });
 }
 
-function showDialogueBox(text) {
+function showDialogueBox(text, abortSignal=null) {
     dialogueContent.textContent = text;
-    return runAnimation(200, new FadeIn(dialogueBox));
+    return runAnimation(200, abortSignal, new FadeIn(dialogueBox));
 }
 
-async function updateDialogueText(...components) {
-    await runAnimation(100, new FadeOut(dialogueContent));
+async function updateDialogueText(abortSignal, ...components) {
+    await runAnimation(100, abortSignal, new FadeOut(dialogueContent));
     clearChildren(dialogueContent);
     dialogueContent.append(...components);
-    await runAnimation(100, new FadeIn(dialogueContent));
+    await runAnimation(100, abortSignal, new FadeIn(dialogueContent));
 }
 
-async function hideDialogueBox() {
-    await runAnimation(200, new FadeOut(dialogueBox));
+async function hideDialogueBox(abortSignal=null) {
+    await runAnimation(200, abortSignal, new FadeOut(dialogueBox));
     dialogueContent.textContent = "";
 }
 
@@ -366,7 +382,7 @@ class DrawLine extends Animation {
     }
 }
 
-function runAnimation(durationMs, ...animations) {
+function runAnimation(durationMs, abortSignal, ...animations) {
     function invokeAnimations(progress) {
         for (const animation of animations) {
             animation.run(animation.easingFunc(progress));
@@ -376,9 +392,12 @@ function runAnimation(durationMs, ...animations) {
     // the state of the object between when `runAnimation` is called and
     // when `requestAnimationFrame` calls us back.
     invokeAnimations(0.0);
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         let start;
         function draw(timestamp) {
+            if (abortSignal != null && abortSignal.aborted) {
+                reject(ABORTED);
+            }
             if (start == undefined) {
                 start = timestamp;
             }
@@ -449,6 +468,8 @@ class Game {
         );
         this.userCardSelection = null;
         this.acceptUserInput = false;
+        this.abortController = new AbortController();
+        this.abortSignal = this.abortController.signal;
         // Resize the placeholders
         userCardsDiv.style.width = gh(
             cardsInAHand * (cardSize + cardGap) - cardGap
@@ -532,7 +553,9 @@ class Game {
                 if (!this.acceptUserInput) {
                     return;
                 }
-                this.onUserPlaceCard(i);
+                this.onUserPlaceCard(i)
+                    .then(this.userPlaceCardEndCallbacks.resolve)
+                    .catch(this.userPlaceCardEndCallbacks.reject);
             });
             button.style.left = gh(centerPosX - halfSlotButtonSize);
             button.style.top = gh(centerPosY - halfSlotButtonSize);
@@ -581,10 +604,16 @@ class Game {
         this.whiteStarIconY = (whiteStarRect.y - floatingLayerRect.y) * px2gh;
     }
     showDialogueBox(text) {  // override-able
-        return showDialogueBox(text);
+        return showDialogueBox(text, this.abortSignal);
     }
     hideDialogueBox() {  // override-able
-        return hideDialogueBox();
+        return hideDialogueBox(this.abortSignal);
+    }
+    runAnimation(durationMs, ...animations) {
+        return runAnimation(durationMs, this.abortSignal, ...animations);
+    }
+    sleep(ms) {
+        return sleep(ms, this.abortSignal);
     }
     async controller() {  // override-able
         await this.drawInitialCards();
@@ -641,14 +670,14 @@ class Game {
         card.addEventListener("click", onclick);
         userHandDiv.append(card);
         // Fly-in animation
-        await runAnimation(400, new TranslateX(
+        await this.runAnimation(400, new TranslateX(
             card, this.outsideScreenX, this.userCardX(cardIndex)
         ));
         // Flip card animation
-        await runAnimation(150, new FlipCard1(card));
+        await this.runAnimation(150, new FlipCard1(card));
         card.classList.remove("back");
         card.classList.add("gray", moonPhases[phase]);
-        await runAnimation(150, new FlipCard2(card));
+        await this.runAnimation(150, new FlipCard2(card));
     }
     prepareLunarCard(cardIndex, phase=null) {
         if (phase == null) {
@@ -663,7 +692,7 @@ class Game {
         const card = this.lunarHand[cardIndex].element;
         lunarHandDiv.append(card);
         // Fly-in animation
-        return runAnimation(400, new TranslateX(
+        return this.runAnimation(400, new TranslateX(
             card, this.outsideScreenX,
             this.lunarCardX(cardIndex)
         ));
@@ -680,8 +709,8 @@ class Game {
         // Select the middle card by default
         this.updateUserCardSelection(Math.floor(this.cardsInAHand / 2));
         // Wait for user input
-        await new Promise(resolve => {
-            this.userPlaceCardControllerCallback = resolve;
+        await new Promise((resolve, reject) => {
+            this.userPlaceCardEndCallbacks = {resolve, reject};
             this.onRecvUserMove = onRecvUserMove;
         });
     }
@@ -738,7 +767,7 @@ class Game {
         const slot = this.slots[slotId];
         slot.card = card.element;
         slot.cardColor = "gray";
-        await runAnimation(500,
+        await this.runAnimation(500,
             new TranslateX(
                 card.element, this.userCardX(this.userPlayedCard),
                 slot.centerPosXGh - halfCardSize
@@ -751,7 +780,6 @@ class Game {
         // Move card from #user-hand to #game-board-cards
         gameBoardCardsDiv.append(card.element);
         await this.showAndDeletePatterns(patterns, slotId, "white");
-        this.userPlaceCardControllerCallback();
     }
     async computerDecisionRequired() {  // override-able
         const aiDecision = this.resolvedAIDecision ?? (await this.aiPromise);
@@ -777,7 +805,7 @@ class Game {
         // Scale and translate animation...
         slot.card = card.element;
         slot.cardColor = "gray";
-        await runAnimation(500,
+        await this.runAnimation(500,
             new TranslateX(
                 card.element, this.lunarCardX(cardIndex),
                 slot.centerPosXGh - halfLunarCardSize
@@ -797,17 +825,17 @@ class Game {
         card.element.style.left = gh(slot.centerPosXGh - halfCardSize);
         card.element.style.top = gh(slot.centerPosYGh - halfCardSize);
         // Flip card animation...
-        await runAnimation(150, new FlipCard1(card.element));
+        await this.runAnimation(150, new FlipCard1(card.element));
         card.element.classList.remove("back");
         card.element.classList.add("gray", moonPhases[card.phase]);
-        await runAnimation(150, new FlipCard2(card.element));
+        await this.runAnimation(150, new FlipCard2(card.element));
         const patterns = backend._Glue_PutCard(
             this.board, slotId, card.phase, backendConst.PlayerBlack
         );
         await this.showAndDeletePatterns(patterns, slotId, "black");
     }
     scaleCards(slotIds, from, to) {
-        return Promise.all(slotIds.map(slotId => runAnimation(
+        return Promise.all(slotIds.map(slotId => this.runAnimation(
             200, new Scale(this.slots[slotId].card, to, from)
         )));
     }
@@ -817,7 +845,7 @@ class Game {
         star.style.left = gh(x);
         star.style.top = gh(y);
         star.classList.add(color);
-        await runAnimation(150, new FadeIn(star));
+        await this.runAnimation(150, new FadeIn(star));
         return new DisplayedStar(star, x, y);
     }
     showStar(slotId, color) {
@@ -854,7 +882,7 @@ class Game {
                 "userScore"
             ];
         for (const dStar of stars) {
-            await runAnimation(300,
+            await this.runAnimation(300,
                 new TranslateX(dStar.star, dStar.x, left),
                 new TranslateY(dStar.star, dStar.y, top),
             );
@@ -924,6 +952,15 @@ class Game {
         return [symbol, p1, p2];
     }
     async showAndDeletePatterns(patterns, subjectSlot, color) {
+        try {
+            await this.showPatterns(patterns, subjectSlot, color);
+        }
+        finally {
+            // In case an ABORT happens...
+            backend._PatternNode_DeleteChain(patterns);
+        }
+    }
+    async showPatterns(patterns, subjectSlot, color) {
         let node = patterns;
         while (!backend._Glue_IsNull(node)) {
             const pattern = backend.getValue(
@@ -1000,7 +1037,7 @@ class Game {
                 this.showDialogueBox(text),
                 this.scaleCards(occupiedSlots, 1, largeCardScale),
             ]);
-            await sleep(500);
+            await this.sleep(500);
             for (const slotId of occupiedSlots) {
                 this.slots[slotId].setCardColor(color);
             }
@@ -1009,7 +1046,7 @@ class Game {
                 this.hideDialogueBox(),
                 (async () => {
                     for (const a of edgeAnimations) {
-                        await runAnimation(150, a);
+                        await this.runAnimation(150, a);
                     }
                 })(),
             ]);
@@ -1020,7 +1057,7 @@ class Game {
                     this.showDialogueBox("Wildcard bonus!"),
                     this.showBonusStars(bonus, color),
                 ]);
-                await sleep(500);
+                await this.sleep(500);
                 await Promise.all([
                     this.hideDialogueBox(),
                     this.hideStars(stars, color),
@@ -1030,7 +1067,6 @@ class Game {
                 node + backendConst.PatternNodeNext, '*'
             );
         }
-        backend._PatternNode_DeleteChain(patterns);
     }
     async endGameBonus() {
         const blackIds = [];
@@ -1045,7 +1081,7 @@ class Game {
                 break;
             }
         }
-        await sleep(1000);
+        await this.sleep(1000);
         await this.showDialogueBox("End Bonus Points");
         await this.scaleCards(blackIds, 1, largeCardScale);
         const stars1 = await this.showStars(blackIds, "black");
@@ -1058,6 +1094,7 @@ class Game {
         await this.hideDialogueBox();
     }
     uninstall() {
+        this.abortController.abort();
         backend._free(this.displayableBoard);
         backend._GameBoard_Delete(this.board);
         clearChildren(edgesSvg);
@@ -1090,17 +1127,20 @@ class TutorialGame extends Game {
     hideDialogueBox() {  // override
         return Promise.resolve();
     }
+    updateDialogueText(...components) {
+        return updateDialogueText(this.abortSignal, ...components);
+    }
     async controller() {  // override
-        await showDialogueBox(
+        await super.showDialogueBox(
             "You're playing against the Half Moon. You'll take turns placing"
             + " moon cards on the board competing to score the most points."
         );
-        await sleep(6000);
+        await this.sleep(6000);
         // Computer goes first in tutorial
         this.lunarForceOp = {phase: 1, slotId: 0};
         this.computerStartThinking();
         await Promise.all([
-            updateDialogueText(
+            this.updateDialogueText(
                 "It's your turn. Place a card next to this one with the"
                 + " matching moon phase to make a ",
                 emphasizedText("PHASE PAIR"),
@@ -1111,21 +1151,21 @@ class TutorialGame extends Game {
         this.userForceOp = {phase: 1, slotId: 1};
         this.lunarForceOp = {phase: 6, slotId: 3};
         await this.userRound(async () => {
-            updateDialogueText(
+            this.updateDialogueText(
                 "Great Job! You created a ",
                 emphasizedText("PHASE PAIR"),
                 " worth one point.",
             );
         });
-        await sleep(3000);
-        await updateDialogueText(
+        await this.sleep(3000);
+        await this.updateDialogueText(
             "But ",
             emphasizedText("PHASE PAIRS"),
             " aren't the only matches you can make...",
         );
-        await sleep(4000);
+        await this.sleep(4000);
         await Promise.all([
-            updateDialogueText(
+            this.updateDialogueText(
                 "Now, place the opposite phase card to create a ",
                 emphasizedText("FULL MOON PAIR"),
                 ".",
@@ -1135,23 +1175,23 @@ class TutorialGame extends Game {
         this.userForceOp = {phase: 2, slotId: 4};
         this.lunarForceOp = {phase: 0, slotId: 6};
         await this.userRound(async () => {
-            updateDialogueText(
+            this.updateDialogueText(
                 "Stellar! Opposite phase cards make a ",
                 emphasizedText("FULL MOON PAIR"),
                 " worth two points.",
             );
         });
-        await sleep(3000);
-        await updateDialogueText(
+        await this.sleep(3000);
+        await this.updateDialogueText(
             "Besides pairs, you can also connect the phases to each"
             + " other for more points...",
         );
-        await sleep(4000);
+        await this.sleep(4000);
         await this.computerRound();
         this.lunarForceOp = {phase: 6, slotId: 8};
         this.computerStartThinking();
         await this.computerRound();
-        await updateDialogueText(
+        await this.updateDialogueText(
             "Place the missing phase card to connect all three cards in a ",
             emphasizedText("LUNAR CYCLE"),
             ".",
@@ -1159,56 +1199,56 @@ class TutorialGame extends Game {
         this.userForceOp = {phase: 7, slotId: 7};
         this.lunarForceOp = {phase: 5, slotId: 5};
         await this.userRound(async () => {
-            updateDialogueText(
+            this.updateDialogueText(
                 "Nice work! You created a ",
                 emphasizedText("LUNAR CYCLE"),
                 " of three cards worth three points.",
             );
         });
-        await sleep(3000);
-        await updateDialogueText(
+        await this.sleep(3000);
+        await this.updateDialogueText(
             "But ",
             emphasizedText("LUNAR CYCLES"),
             " can be longer than three cards...",
         );
-        await sleep(4000);
+        await this.sleep(4000);
         await Promise.all([
             this.computerRound(),
-            updateDialogueText(
+            this.updateDialogueText(
                 "Oh no, the Half Moon has stolen your ",
                 emphasizedText("LUNAR CYCLE"),
                 "! It's now four cards long and the Moon scores four points.",
             ),
         ]);
-        await sleep(3000);
+        await this.sleep(3000);
         this.userForceOp = {phase: 4, slotId: 2};
-        await updateDialogueText(
+        await this.updateDialogueText(
             "Add a card to the ",
             emphasizedText("LUNAR CYCLE"),
             " to extend it again and claim them back!",
         );
         await this.userRound(async () => {
-            updateDialogueText(
+            this.updateDialogueText(
                 "You did it! The cards are yours again and you get five"
                 + " more points for a five card ",
                 emphasizedText("LUNAR CYCLE"),
                 ".",
             );
         });
-        await sleep(3000);
-        await updateDialogueText(
+        await this.sleep(3000);
+        await this.updateDialogueText(
             "The game ends when the board is completely filled with cards.",
         );
-        await sleep(3000);
+        await this.sleep(3000);
         await Promise.all([
-            updateDialogueText(
+            this.updateDialogueText(
                 "Both players receive a bonus point for each card they"
                 + " have claimed on the final board.",
             ),
             this.endGameBonus(),
         ]);
-        await sleep(3000);
-        await hideDialogueBox();
+        await this.sleep(3000);
+        await super.hideDialogueBox();
         this.uninstall();
     }
     async enableUserInput() {  // override
@@ -1236,25 +1276,32 @@ class TutorialGame extends Game {
 
 let game;
 
+function gameEnd() {
+    game = undefined;  // For GC
+    enterScene("menu-scene");
+}
+
+function runGame() {
+    game.controller().then(gameEnd)
+    .catch((reason) => {
+        if (reason !== ABORTED) {
+            throw reason;
+        }
+    });
+}
+
 export function onTutorial() {
     enterScene("game-scene");
     game = new TutorialGame();
-    game.controller().then(() => {
-        game = undefined;  // For GC
-        enterScene("menu-scene");
-    });
+    runGame();
 }
 export function onPlay() {
     enterScene("game-scene");
     game = new Game(4, Boards.Tree, 3);
-    game.controller().then(() => {
-        game = undefined;  // For GC
-        enterScene("menu-scene");
-    });
+    runGame();
 }
 export function onCustomGame() {}
 export function onExitGame() {
     game.uninstall();
-    game = undefined;  // For GC
-    enterScene("menu-scene");
+    gameEnd();
 }
