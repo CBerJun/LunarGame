@@ -704,11 +704,11 @@ class Game {
         userHandDiv.classList.add("enabled");
     }
     async userRound(onRecvUserMove=null) {
-        this.acceptUserInput = true;
         await this.enableUserInput();
         // Select the middle card by default
         this.updateUserCardSelection(Math.floor(this.cardsInAHand / 2));
         // Wait for user input
+        this.acceptUserInput = true;
         await new Promise((resolve, reject) => {
             this.userPlaceCardEndCallbacks = {resolve, reject};
             this.onRecvUserMove = onRecvUserMove;
@@ -745,6 +745,7 @@ class Game {
         if (this.filterSlot(slotId)) {
             return;
         }
+        this.acceptUserInput = false;
         if (this.onRecvUserMove != null) {
             await this.onRecvUserMove();
         }
@@ -754,7 +755,6 @@ class Game {
         this.userPlayedCard = this.userCardSelection;
         this.updateUserCardSelection(null);
         this.disableUserInput(slotId);
-        this.acceptUserInput = false;
         card.element.removeEventListener("click", card.onclick);
         const patterns = backend._Glue_PutCard(
             this.board, slotId, card.phase, backendConst.PlayerWhite
