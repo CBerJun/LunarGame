@@ -21,15 +21,16 @@ function clearChildren(element) {
     }
 }
 
-let currentScene;
+let currentScene = null;
 
 function enterScene(scene) {
     if (currentScene) {
-        document.getElementById(currentScene)
-            .classList.toggle("visible", false);
+        document.getElementById(currentScene).classList.remove("visible");
     }
     currentScene = scene;
-    document.getElementById(scene).classList.toggle("visible", true);
+    if (scene) {
+        document.getElementById(scene).classList.add("visible");
+    }
 }
 
 enterScene("loading-scene");
@@ -53,7 +54,31 @@ const bestRecordText = document.getElementById("best-record-text");
 // "lunar-record" localStorage is a JSON
 // {stars: number, level: number}
 
-function updateRecordText(record) {
+let record = null;
+
+function tryUpdateRecord(newRecord) {
+    let updated = false;
+    if (record == null) {
+        record = newRecord;
+        updated = true
+    }
+    else {
+        if (newRecord.stars > record.stars) {
+            updated = true;
+            record.stars = newRecord.stars;
+        }
+        if (newRecord.level > record.level) {
+            updated = true;
+            record.level = newRecord.level;
+        }
+    }
+    if (updated) {
+        localStorage.setItem("lunar-record", JSON.stringify(record));
+    }
+    return updated;
+}
+
+function updateRecordText() {
     clearChildren(bestRecordText);
     if (record == null) {
         bestRecordText.textContent =
@@ -130,8 +155,9 @@ externalSvg("card.svg")
         );
         clearInterval(loadingAnimSchedule);  // Turn off animation loop
         enterScene("menu-scene");
-        const record = localStorage.getItem("lunar-record");
-        updateRecordText(record ? JSON.parse(record) : null);
+        const recordStr = localStorage.getItem("lunar-record");
+        record = recordStr ? JSON.parse(recordStr) : null;
+        updateRecordText();
         blackStarIcon = newStar();
         blackStarIcon.classList.add("black");
         whiteStarIcon = newStar();
@@ -233,8 +259,14 @@ document.head.append(extraStyle);
 cardSelectionBox.style.opacity = "0";
 dialogueBox.style.opacity = "0";
 
+function randomInt(below) {
+    return Math.floor(Math.random() * below);
+}
 function randomPhase() {
-    return Math.floor(Math.random() * moonPhases.length);
+    return randomInt(moonPhases.length);
+}
+function randomBoard() {
+    return randomInt(Boards.length);
 }
 
 const ABORTED = new Error("ABORTED");
@@ -381,6 +413,15 @@ class DrawLine extends Animation {
         this.svgLine.setAttribute("y2", this.y + this.dy * progress);
     }
 }
+class Count extends FromTo {
+    constructor(element, from, to, easingFunc=linear) {
+        super(from, to, easingFunc);
+        this.element = element;
+    }
+    _run(value) {
+        this.element.textContent = String(Math.round(value));
+    }
+}
 
 function runAnimation(durationMs, abortSignal, ...animations) {
     function invokeAnimations(progress) {
@@ -412,6 +453,25 @@ function runAnimation(durationMs, abortSignal, ...animations) {
         }
         window.requestAnimationFrame(draw);
     });
+}
+
+async function fadeOutCurrentScene() {
+    const sceneDiv = document.getElementById(currentScene);
+    sceneDiv.classList.add("fading");
+    await runAnimation(500, null, new FadeOut(sceneDiv));
+    sceneDiv.classList.remove("visible", "fading");
+    currentScene = null;
+}
+
+async function enterSceneAnimated(scene) {
+    if (currentScene) {
+        throw "currentScene != undefined";
+    }
+    currentScene = scene;
+    const sceneDiv = document.getElementById(scene);
+    sceneDiv.classList.add("visible", "fading");
+    await runAnimation(500, null, new FadeIn(sceneDiv));
+    sceneDiv.classList.remove("fading");
 }
 
 class CardInHand {
@@ -456,9 +516,18 @@ function newLunarCycleSymbol() {
     return node;
 }
 
+const AILevel = {
+    WEAK: -1,
+    // >0 values correspond to depth of search passed to C backend
+    GREEDY: 1,
+    SMART: 2,
+    // 3 has the same effect as 2
+    SMARTER: 4,
+};
+
 class Game {
-    constructor(aiDepth, boardType, cardsInAHand) {
-        this.aiDepth = aiDepth;
+    constructor(aiLevel, boardType, cardsInAHand) {
+        this.aiLevel = aiLevel;
         this.cardsInAHand = cardsInAHand;
         const db = backend._malloc(backendConst.DisplayableBoardSize);
         this.displayableBoard = db;
@@ -470,6 +539,7 @@ class Game {
         this.acceptUserInput = false;
         this.abortController = new AbortController();
         this.abortSignal = this.abortController.signal;
+        this.cleanedDom = false;
         // Resize the placeholders
         userCardsDiv.style.width = gh(
             cardsInAHand * (cardSize + cardGap) - cardGap
@@ -550,12 +620,15 @@ class Game {
             this.slots.push(new BoardSlot(centerPosX, centerPosY, button));
             button.type = "button";
             button.addEventListener("click", (event) => {
-                if (!this.acceptUserInput) {
+                if (!this.acceptUserInput || this.filterSlot(i)) {
                     return;
                 }
                 this.onUserPlaceCard(i)
                     .then(this.userPlaceCardEndCallbacks.resolve)
-                    .catch(this.userPlaceCardEndCallbacks.reject);
+                    .catch(this.userPlaceCardEndCallbacks.reject)
+                    .finally(() => {
+                        this.userPlaceCardEndCallbacks = undefined;
+                    });
             });
             button.style.left = gh(centerPosX - halfSlotButtonSize);
             button.style.top = gh(centerPosY - halfSlotButtonSize);
@@ -624,7 +697,7 @@ class Game {
             userRound = !userRound;
         }
         await this.endGameBonus();
-        this.uninstall();
+        this.cleanup();
     }
     drawInitialCards() {
         const promises = [];
@@ -720,31 +793,48 @@ class Game {
     }
     computerStartThinking() {  // override-able
         this.prepareLunarCard(this.lunarPlayedCard);
-        const aiChoices =
-            backend._malloc(this.cardsInAHand * backendConst.IntSize);
-        for (let i = 0, ptr = aiChoices; i < this.cardsInAHand; ++i) {
-            backend.setValue(ptr, this.lunarHand[i].phase, int);
-            ptr += backendConst.IntSize;
+        let aiDepth = this.aiLevel;
+        if (aiDepth == AILevel.WEAK) { /* !!!! */
+            aiDepth = Math.random() >= 2 ? AILevel.GREEDY : 0;
         }
-        this.aiPromise = AIMove(
-            this.board, aiChoices, this.cardsInAHand, this.aiDepth
-        );
-        this.resolvedAIDecision = null;
-        this.aiPromise.then((result) => {
-            backend._free(aiChoices);
-            this.resolvedAIDecision = result;
-        });
-        // Temporarily disable Exit button... It can lead to many
-        // unexpected things when a C function is running.
-        exitButton.setAttribute("disabled", "");
+        this.didInvokeCAI = aiDepth > 0;
+        if (this.didInvokeCAI) {
+            const aiChoices =
+                backend._malloc(this.cardsInAHand * backendConst.IntSize);
+            for (let i = 0, ptr = aiChoices; i < this.cardsInAHand; ++i) {
+                backend.setValue(ptr, this.lunarHand[i].phase, int);
+                ptr += backendConst.IntSize;
+            }
+            this.aiPromise = AIMove(
+                this.board, aiChoices, this.cardsInAHand, aiDepth
+            );
+            this.resolvedAIDecision = null;
+            this.aiPromise.then((result) => {
+                backend._free(aiChoices);
+                this.resolvedAIDecision = result;
+            });
+            // Temporarily disable Exit button... It can lead to many
+            // unexpected things when a C function is running.
+            exitButton.setAttribute("disabled", "");
+        }
+        else {
+            // Play randomly...
+            const slotIds = [];
+            for (const [i, slot] of this.slots.entries()) {
+                if (slot.card == null) {
+                    slotIds.push(i);
+                }
+            }
+            this.resolvedAIDecision = [
+                randomInt(this.cardsInAHand),
+                slotIds[randomInt(slotIds.length)]
+            ];
+        }
     }
     filterSlot(slotId) {  // override-able
         return false;
     }
     async onUserPlaceCard(slotId) {
-        if (this.filterSlot(slotId)) {
-            return;
-        }
         this.acceptUserInput = false;
         if (this.onRecvUserMove != null) {
             await this.onRecvUserMove();
@@ -759,14 +849,14 @@ class Game {
         const patterns = backend._Glue_PutCard(
             this.board, slotId, card.phase, backendConst.PlayerWhite
         );
+        const slot = this.slots[slotId];
+        slot.card = card.element;
+        slot.cardColor = "gray";
         if (this.slotsFilled != this.slots.length) {
             // As soon as the user plays their card, we could deal AI
             // the card (internally) and let it start thinking
             this.computerStartThinking();
         }
-        const slot = this.slots[slotId];
-        slot.card = card.element;
-        slot.cardColor = "gray";
         await this.runAnimation(500,
             new TranslateX(
                 card.element, this.userCardX(this.userPlayedCard),
@@ -782,6 +872,9 @@ class Game {
         await this.showAndDeletePatterns(patterns, slotId, "white");
     }
     async computerDecisionRequired() {  // override-able
+        if (!this.didInvokeCAI) {
+            return this.resolvedAIDecision;
+        }
         const aiDecision = this.resolvedAIDecision ?? (await this.aiPromise);
         // C function has finished, resume exit button
         exitButton.removeAttribute("disabled");
@@ -1093,10 +1186,19 @@ class Game {
         await this.scaleCards(whiteIds, largeCardScale, 1);
         await this.hideDialogueBox();
     }
-    uninstall() {
+    abort() {
         this.abortController.abort();
+        if (this.userPlaceCardEndCallbacks != undefined) {
+            this.userPlaceCardEndCallbacks.reject(ABORTED);
+        }
+        this.cleanup();
+    }
+    cleanup() {
         backend._free(this.displayableBoard);
         backend._GameBoard_Delete(this.board);
+    }
+    cleanDom() {
+        this.cleanedDom = true;
         clearChildren(edgesSvg);
         clearChildren(slotsDiv);
         clearChildren(lunarHandDiv);
@@ -1249,7 +1351,7 @@ class TutorialGame extends Game {
         ]);
         await this.sleep(3000);
         await super.hideDialogueBox();
-        this.uninstall();
+        this.cleanup();
     }
     async enableUserInput() {  // override
         await this.dealUserCard(0, this.userForceOp.phase);
@@ -1274,34 +1376,219 @@ class TutorialGame extends Game {
     }
 }
 
+const progressTopMessage = document.getElementById("progress-top-message");
+const progressLevelText = document.getElementById("progress-level-text");
+const progressStatsTable = document.getElementById("progress-stats");
+const progressExitText = document.getElementById("progress-exit-text");
+const progressContinueButton =
+    document.getElementById("progress-continue-button");
+const progressLeaveButton = document.getElementById("leave-button");
+const progressLevelStars = document.getElementById("progress-level-stars");
+const progressTotalStars = document.getElementById("progress-total-stars");
+const progressButtons = document.getElementById("progress-buttons");
+const progressHint = document.getElementById("progress-hint");
+const progressWildcardDiv = document.getElementById("progress-wildcard");
+
+const difficultyThreshold = [3, 6, 9];
+
+class LeveledGame {
+    constructor(tutorial) {
+        this.tutorial = tutorial;
+        this.totalScore = 0;
+    }
+    inGameAbort() {
+        this.game.abort();
+    }
+    async controller() {
+        let level = this.tutorial ? 0 : 1;
+        let goOn = true;
+        let reservedGameBoard = null;
+        while (goOn) {
+            await fadeOutCurrentScene();
+            // Background middle if needed
+            // Enter game-scene in order for Game to properly initialize
+            // e.g. coordinate information; but we don't want user to
+            // see the game-scene yet.
+            gameSceneDiv.style.visibility = "hidden";
+            enterScene("game-scene");
+            // Wait a little in case the engine needs time to update
+            // things...
+            await sleep(1);
+            const isTutorial = level == 0;
+            let gameBoard;
+            if (isTutorial) {
+                this.game = new TutorialGame();
+            }
+            else {
+                const aiDepth =
+                    level <= difficultyThreshold[0] ? AILevel.WEAK :
+                    level <= difficultyThreshold[1] ? AILevel.GREEDY :
+                    level <= difficultyThreshold[2] ? AILevel.SMART :
+                    AILevel.SMARTER;
+                if (reservedGameBoard != null) {
+                    gameBoard = reservedGameBoard;
+                    reservedGameBoard = null;
+                }
+                else {
+                    gameBoard = randomBoard();
+                }
+                this.game = new Game(aiDepth, gameBoard, 3);
+            }
+            enterScene(null);
+            gameSceneDiv.style.removeProperty("visibility");
+            enterSceneAnimated("game-scene");
+            try {
+                await this.game.controller();
+            }
+            catch (exc) {
+                if (exc === ABORTED) {
+                    break;
+                }
+                else {
+                    this.game.cleanDom();
+                    throw exc;
+                }
+            }
+            const us = this.game.userScore;
+            const ls = this.game.lunarScore;
+            await fadeOutCurrentScene();
+            this.game.cleanDom();
+            progressLevelText.textContent = isTutorial ? "Tutorial completed!"
+                : "Level " + level;
+            progressStatsTable.style.display =
+                progressWildcardDiv.style.display =
+                isTutorial ? "none" : "initial";
+            progressLeaveButton.classList.toggle("expanded", us < ls);
+            [
+                progressExitText.style.display,
+                progressContinueButton.style.display
+            ] = us < ls ? ["initial", "none"] : ["none", "initial"];
+            if (us > ls) {
+                // Background left
+                progressTopMessage.textContent = "You win!";
+                progressContinueButton.textContent = "Continue";
+                // Add progress to wildcard
+            }
+            else if (us == ls) {
+                // Background right
+                progressTopMessage.textContent =
+                    "Retry this level to advance.";
+                progressContinueButton.textContent = "Retry";
+                reservedGameBoard = gameBoard;
+            }
+            else {
+                // Background right
+                progressTopMessage.textContent =
+                    "The Half Moon has ended your journey.";
+            }
+            const oldScore = this.totalScore;
+            progressTotalStars.textContent = String(oldScore);
+            progressLevelStars.textContent = "0";
+            progressButtons.style.opacity = "0";
+            progressButtons.style.pointerEvents = "none";
+            if (difficultyThreshold.includes(level)) {
+                progressHint.style.display = "initial";
+                progressHint.textContent =
+                    "Watch out! The game has become harder...";
+            }
+            else {
+                progressHint.style.display = "none";
+            }
+            await enterSceneAnimated("progress-scene");
+            if (!isTutorial) {
+                this.totalScore += us;
+                tryUpdateRecord({level: level, stars: this.totalScore});
+                await runAnimation(
+                    1500, null,
+                    new Count(progressTotalStars, oldScore, this.totalScore),
+                    new Count(progressLevelStars, 0, us),
+                );
+                // Wildcard animation...
+            }
+            await runAnimation(300, null, new FadeIn(progressButtons));
+            // If the user loses they only have the option to leave;
+            // tutorial progress doesn't really matter:
+            noLeaveConfirm = us < ls || isTutorial;
+            progressButtons.style.removeProperty("pointer-events");
+            goOn = await new Promise(
+                (resolve) => {this.progress = resolve;}
+            );
+            if (us > ls) {
+                ++level;
+            }
+        }
+        await fadeOutCurrentScene();
+        if (!this.game.cleanedDom) {
+            this.game.cleanDom();
+        }
+        // Background middle if needed
+        updateRecordText();
+        await enterSceneAnimated("menu-scene");
+        this.game = undefined;  // For GC
+    }
+}
+
 let game;
 
-function gameEnd() {
-    game = undefined;  // For GC
-    enterScene("menu-scene");
+export async function onTutorial() {
+    game = new LeveledGame(true);
+    game.controller();
 }
 
-function runGame() {
-    game.controller().then(gameEnd)
-    .catch((reason) => {
-        if (reason !== ABORTED) {
-            throw reason;
-        }
-    });
-}
-
-export function onTutorial() {
-    enterScene("game-scene");
-    game = new TutorialGame();
-    runGame();
-}
 export function onPlay() {
-    enterScene("game-scene");
-    game = new Game(4, Boards.Tree, 3);
-    runGame();
+    game = new LeveledGame(false);
+    game.controller();
 }
+
 export function onCustomGame() {}
+
+const popupLayer = document.getElementById("popup-layer");
+
+let activePopup;
+
+async function summonPopup(name) {
+    const popup = document.getElementById(name);
+    activePopup = name;
+    popup.classList.add("visible");
+    popupLayer.classList.add("visible");
+    await runAnimation(300, null, new FadeIn(popupLayer));
+}
+
+async function hidePopup() {
+    popupLayer.classList.add("fading");
+    await runAnimation(300, null, new FadeOut(popupLayer));
+    document.getElementById(activePopup).classList.remove("visible");
+    popupLayer.classList.remove("fading", "visible");
+}
+
+export let onPopupYes;
+export let onPopupNo;
+
 export function onExitGame() {
-    game.uninstall();
-    gameEnd();
+    summonPopup("exit-confirm-popup");
+    onPopupYes = async () => {
+        await hidePopup();
+        game.inGameAbort();
+    };
+    onPopupNo = hidePopup;
+}
+
+let noLeaveConfirm = false;
+
+export function onLeave() {
+    if (noLeaveConfirm) {
+        game.progress(false);
+    }
+    else {
+        summonPopup("exit-confirm-popup");
+        onPopupYes = async () => {
+            await hidePopup();
+            game.progress(false);
+        };
+        onPopupNo = hidePopup;
+    }
+}
+
+export function onContinue() {
+    game.progress(true);
 }

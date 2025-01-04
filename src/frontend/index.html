@@ -112,10 +112,71 @@
                     <div id="wildcards"></div>
                 </div>
             </div>
+            <div class="scene" id="progress-scene">
+                <p class="centered-text size-large"
+                    id="progress-top-message"></p>
+                <div id="progress-wildcard">
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 100 100">
+                        <rect id="progress-wildcard-icon" fill="#ebecf2"
+                            x="0" y="100" width="100" height="0"
+                            clip-path="circle(50% at 50% 50%) view-box"></rect>
+                    </svg>
+                    <p class="centered-text size-large"
+                        id="progress-wildcard-text"></p>
+                </div>
+                <div>
+                    <p class="centered-text size-normal"
+                        id="progress-level-text"></p>
+                    <p class="centered-text fine-print" id="progress-hint"></p>
+                </div>
+                <table class="size-normal" id="progress-stats"><tbody>
+                    <tr>
+                        <th>Level Stars:</th>
+                        <td id="progress-level-stars"></td>
+                    </tr>
+                    <tr>
+                        <th>Total Stars:</th>
+                        <td id="progress-total-stars"></td>
+                    </tr>
+                </tbody></table>
+                <div id="progress-buttons">
+                    <button type="button" class="ui size-large"
+                        id="leave-button"
+                        onclick="lunar.onLeave()" title="Exit">
+                        <svg xmlns="http://www.w3.org/2000/svg" id="leave-icon"
+                            viewBox="0 0 90 90">
+                            <g stroke-width="6" stroke="white" fill="none">
+                                <polyline points="40,15 5,45 40,75"></polyline>
+                                <line x1="5" x2="60" y1="45" y2="45"></line>
+                                <polyline points="60,10 80,10 80,80 60,80"
+                                    ></polyline>
+                            </g>
+                        </svg>
+                        <span id="progress-exit-text">Exit</span>
+                    </button>
+                    <button type="button" class="ui size-large"
+                        id="progress-continue-button"
+                        onclick="lunar.onContinue()"></button>
+                </div>
+            </div>
             <div class="scene" id="custom-settings-scene">
                 <!-- Game board -->
                 <!-- AI level -->
                 <!-- Button: Go! -->
+            </div>
+            <div id="popup-layer">
+                <div class="popup" id="exit-confirm-popup">
+                    <p class="centered-text size-large">Quit?</p>
+                    <p class="centered-text size-normal"
+                        >Your progress is not saved.</p>
+                    <div id="exit-confirm-buttons">
+                        <button type="button" class="ui size-large"
+                            onclick="lunar.onPopupYes()">Quit</button>
+                        <button type="button" class="ui size-large"
+                            onclick="lunar.onPopupNo()">Cancel</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div></body>

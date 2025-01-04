@@ -45,11 +45,16 @@ div.scene {
 }
 
 div#background,
-div.scene.visible {
+div.scene.visible,
+div#popup-layer.visible {
     display: block;
     position: absolute;
     width: 100%;
     height: 100%;
+}
+
+div.scene.fading {
+    pointer-events: none;
 }
 
 /* Background */
@@ -91,7 +96,8 @@ div#loading-card-wrapper svg.card {
 /* Menu scene */
 
 div#menu-scene.visible,
-div#game-static-layer {
+div#game-static-layer,
+div#progress-scene.visible {
     padding-top: calc(var(--half-moon-size) * 0.55);
     box-sizing: border-box;
 }
@@ -156,7 +162,7 @@ div#user-cards-placeholder {
 div#game-board {
     margin: calc(1.5 * var(--gh)) auto;
     box-sizing: border-box;
-    height: calc(28 * var(--gh));
+    height: calc(36 * var(--gh));
 }
 
 svg#edges {
@@ -244,6 +250,87 @@ svg#user-card-selection-box {
 
 div#stars svg.star {
     position: absolute;
+}
+
+/* Progress Scene */
+
+div#progress-scene.visible {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+}
+
+div#progress-buttons {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+}
+
+div#progress-buttons > button {
+    box-sizing: border-box;
+    height: 100%;
+}
+
+button#progress-continue-button {
+    padding: 0.3em 0.6em;
+}
+
+button#leave-button {
+    display: flex;
+    align-items: center;
+    padding: 0.35em;
+}
+
+button#leave-button > svg {
+    height: 100%;
+}
+
+button#leave-button.expanded {
+    gap: 0.3em;
+    padding: 0.3em 0.5em;
+}
+
+table#progress-stats th {
+    font-weight: normal;
+    text-align: right;
+    padding-right: 0.5em;
+    color: #c6d5ff;
+}
+
+/* Popup */
+
+div#popup-layer,
+div.popup {
+    display: none;
+}
+
+div.popup.visible {
+    display: initial;
+}
+
+div#popup-layer.visible {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+div#popup-layer.fading {
+    pointer-events: none;
+}
+
+div#exit-confirm-buttons {
+    display: flex;
+    justify-content: center;
+    gap: calc(3 * var(--gh));
+}
+
+div#exit-confirm-buttons > button {
+    padding: 0.3em 0.6em;
 }
 
 /* svg.card coloring */
@@ -386,8 +473,13 @@ rect.slot-indicator {
 
 /* General stuffs */
 
-p {
+p,
+th,
+td {
     color: white;
+}
+
+p {
     margin: 0.2em 0;
     padding: 0 1em;
 }
@@ -412,6 +504,9 @@ button.ui {
     color: white;
     border-style: solid;
     border-image: url("button_border.png") 30 / 0.7em / 0.1em;
+}
+button.ui:enabled {
+    cursor: pointer;
 }
 button.ui:enabled:hover {
     background: linear-gradient(

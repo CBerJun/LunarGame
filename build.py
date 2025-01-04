@@ -77,7 +77,7 @@ def build_boards_glue() -> int:
         fp.write("export const Boards = {")
         for name, id_ in name2id.items():
             fp.write(f"{name}: {id_},")
-        fp.write("};")
+        fp.write("length: %d};" % len(name2id))
     return 0
 
 CONST_PATTERN = re.compile(r'ITEM\((\w+),')
