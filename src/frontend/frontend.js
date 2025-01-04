@@ -1486,7 +1486,7 @@ class LeveledGame {
             progressLevelStars.textContent = "0";
             progressButtons.style.opacity = "0";
             progressButtons.style.pointerEvents = "none";
-            if (difficultyThreshold.includes(level)) {
+            if (difficultyThreshold.includes(level) && us > ls) {
                 progressHint.style.display = "initial";
                 progressHint.textContent =
                     "Watch out! The game has become harder...";
