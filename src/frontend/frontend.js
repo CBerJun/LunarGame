@@ -207,6 +207,7 @@ const dialogueBox = document.getElementById("dialogue-box");
 const dialogueContent = document.getElementById("dialogue-content");
 const starsDiv = document.getElementById("stars");
 const exitButton = document.getElementById("exit-button");
+const wildcardsButton = document.getElementById("wildcards-button");
 
 const slotButtonSize = 5.25;  // gh
 const cardSize = slotButtonSize * 1.48;
@@ -776,8 +777,14 @@ class Game {
         slotsDiv.classList.add("enabled");
         userHandDiv.classList.add("enabled");
     }
+    showWildcards() {  // override-able
+        return wildcardManager.wildcards.size > 0;
+    }
     async userRound(onRecvUserMove=null) {
         await this.enableUserInput();
+        if (this.showWildcards()) {
+            wildcardsButton.removeAttribute("disabled");
+        }
         // Select the middle card by default
         this.updateUserCardSelection(Math.floor(this.cardsInAHand / 2));
         // Wait for user input
@@ -836,6 +843,9 @@ class Game {
     }
     async onUserPlaceCard(slotId) {
         this.acceptUserInput = false;
+        if (this.showWildcards()) {
+            wildcardsButton.setAttribute("disabled", "");
+        }
         if (this.onRecvUserMove != null) {
             await this.onRecvUserMove();
         }
@@ -979,7 +989,7 @@ class Game {
                 new TranslateX(dStar.star, dStar.x, left),
                 new TranslateY(dStar.star, dStar.y, top),
             );
-            dStar.star.style.display = "none";
+            dStar.star.classList.add("display-none");
             scoreText.textContent = String(++this[scoreProp]);
         }
         clearChildren(starsDiv);
@@ -1208,6 +1218,8 @@ class Game {
         userHandDiv.classList.remove("enabled");
         cardSelectionBox.style.opacity = "0";
         dialogueBox.style.opacity = "0";
+        wildcardsButton.setAttribute("disabled", "");
+        resetWildcardMenu();
     }
 }
 
@@ -1353,6 +1365,9 @@ class TutorialGame extends Game {
         await super.hideDialogueBox();
         this.cleanup();
     }
+    showWildcards() {  // override
+        return false;
+    }
     async enableUserInput() {  // override
         await this.dealUserCard(0, this.userForceOp.phase);
         // Force user to play the card at a certain slot
@@ -1376,6 +1391,110 @@ class TutorialGame extends Game {
     }
 }
 
+const Wildcards = {
+    HUNTER_MOON: {
+        id: 0,
+        name: "Hunter Moon",
+        origin: "October",
+        description:
+            "Destroy all cards controlled by the Half Moon on the board.",
+        uv: [0, 0],
+        async run(game) {
+            await game.showDialogueBox("Hunter Moon!");
+            // ...
+            await game.hideDialogueBox();
+        },
+    },
+};
+const wildcardNames = Object.getOwnPropertyNames(Wildcards);
+const wildcardIds = wildcardNames.map(name => Wildcards[name].id);
+const wildcardIdToName = new Map(wildcardNames.map(
+    (name) => [Wildcards[name].id, name]
+));
+
+const wildcardSpriteUnit = 100;  // px; corresponds to wildcard_sprites.png
+
+// "lunar-wildcards" local storage is a JSON array of wildcard IDs.
+
+const wildcardMenu = document.getElementById("wildcard-menu");
+const wildcardIconDiv = document.getElementById("wildcard-icon");
+const wildcardNameP = document.getElementById("wildcard-name");
+const wildcardOriginP = document.getElementById("wildcard-origin");
+const wildcardDescriptionP = document.getElementById("wildcard-description");
+const wildcardPlayButton = document.getElementById("wildcard-play-button");
+const wildcardInfoBox = document.getElementById("wildcard-info-box");
+const wildcardNoInfoHint = document.getElementById("wildcard-no-info-hint");
+
+function setWildcardIconUV(element, uv) {
+    element.style.backgroundPositionX = `-${wildcardSpriteUnit * uv[0]}px`;
+    element.style.backgroundPositionY = `-${wildcardSpriteUnit * uv[1]}px`;
+}
+
+const playedWildcards = new Set();
+
+function resetWildcardMenu() {
+    playedWildcards.clear();
+}
+
+function addWildcardToDom(id) {
+    const wc = Wildcards[wildcardIdToName.get(id)];
+    const button = document.createElement("button");
+    button.classList.add("wildcard-sprite");
+    button.type = "button";
+    button.title = wc.name;
+    setWildcardIconUV(button, wc.uv);
+    button.addEventListener("click", (event) => {
+        wildcardInfoBox.classList.remove("display-none");
+        wildcardNoInfoHint.classList.add("display-none");
+        setWildcardIconUV(wildcardIconDiv, wc.uv);
+        wildcardNameP.textContent = wc.name;
+        wildcardOriginP.textContent = `From ${wc.origin}`;
+        wildcardDescriptionP.textContent = wc.description;
+        const playedCard = playedWildcards.has(id);
+        wildcardPlayButton.classList.toggle("display-none", playedCard);
+        if (!playedCard) {
+            wildcardPlayButton.onclick = async (event) => {
+                await hidePopup();
+                playedWildcards.add(id);
+                await wc.run(game.game);
+            };
+        }
+    });
+    wildcardMenu.append(button);
+}
+
+class WildcardManager {
+    constructor() {
+        const wildcardsStr = localStorage.getItem("lunar-wildcards");
+        this.wildcards = new Set(wildcardsStr ? JSON.parse(wildcardsStr) : []);
+        this.nextCardProgress = 0;
+        this.wildcards.forEach(addWildcardToDom);
+    }
+    allCardsObtained() {
+        return this.wildcards.size == wildcardNames.length;
+    }
+    obtainOneCard() {
+        const pool = wildcardIds.filter(id => !this.wildcards.has(id));
+        const id = pool[randomInt(pool.length)];
+        this.wildcards.add(id);
+        localStorage.setItem(
+            "lunar-wildcards", JSON.stringify(Array.from(this.wildcards))
+        );
+        addWildcardToDom(id);
+        return id;
+    }
+    levelsNeeded() {
+        // 2 levels needed for first 4 wildcards and 3 levels for
+        // subsequent ones.
+        return this.wildcards.length >= 4 ? 3 : 2;
+    }
+    getProgressPercentage() {
+        return Math.round(100 * this.nextCardProgress / this.levelsNeeded());
+    }
+}
+
+const wildcardManager = new WildcardManager();
+
 const progressTopMessage = document.getElementById("progress-top-message");
 const progressLevelText = document.getElementById("progress-level-text");
 const progressStatsTable = document.getElementById("progress-stats");
@@ -1388,8 +1507,24 @@ const progressTotalStars = document.getElementById("progress-total-stars");
 const progressButtons = document.getElementById("progress-buttons");
 const progressHint = document.getElementById("progress-hint");
 const progressWildcardDiv = document.getElementById("progress-wildcard");
+const progressWildcardIcon = document.getElementById("progress-wildcard-icon");
+const progressWildcardPercentage =
+    document.getElementById("progress-wildcard-percentage");
+const unlockedWildcardIcon = document.getElementById("unlocked-wildcard-icon");
 
 const difficultyThreshold = [3, 6, 9];
+
+function setWildcardIconPercentage(percentage) {
+    progressWildcardIcon.setAttribute("y", String(100 - percentage));
+    progressWildcardIcon.setAttribute("height", String(percentage));
+}
+
+class WildcardIconGrow extends FromTo {
+    constructor(from, to, easingFunc=linear) {
+        super(from, to, easingFunc);
+        this._run = setWildcardIconPercentage;
+    }
+}
 
 class LeveledGame {
     constructor(tutorial) {
@@ -1403,6 +1538,7 @@ class LeveledGame {
         let level = this.tutorial ? 0 : 1;
         let goOn = true;
         let reservedGameBoard = null;
+        wildcardManager.nextCardProgress = 0;
         while (goOn) {
             await fadeOutCurrentScene();
             // Background middle if needed
@@ -1451,23 +1587,27 @@ class LeveledGame {
             }
             const us = this.game.userScore;
             const ls = this.game.lunarScore;
+            if (activePopup != null) {
+                // Mo more in-game popups after the game finishes
+                await hidePopup();
+            }
             await fadeOutCurrentScene();
             this.game.cleanDom();
+            const allWcsObtained = wildcardManager.allCardsObtained();
             progressLevelText.textContent = isTutorial ? "Tutorial completed!"
                 : "Level " + level;
-            progressStatsTable.style.display =
-                progressWildcardDiv.style.display =
-                isTutorial ? "none" : "initial";
+            progressStatsTable.classList.toggle("display-none", isTutorial);
+            progressWildcardDiv.classList.toggle(
+                "display-none", isTutorial || allWcsObtained
+            );
             progressLeaveButton.classList.toggle("expanded", us < ls);
-            [
-                progressExitText.style.display,
-                progressContinueButton.style.display
-            ] = us < ls ? ["initial", "none"] : ["none", "initial"];
+            progressExitText.classList.toggle("display-none", us >= ls);
+            progressContinueButton.classList.toggle("display-none", us < ls);
+            unlockedWildcardIcon.classList.add("display-none");
             if (us > ls) {
                 // Background left
                 progressTopMessage.textContent = "You win!";
                 progressContinueButton.textContent = "Continue";
-                // Add progress to wildcard
             }
             else if (us == ls) {
                 // Background right
@@ -1494,6 +1634,9 @@ class LeveledGame {
             else {
                 progressHint.style.display = "none";
             }
+            const oldWcPercentage = wildcardManager.getProgressPercentage();
+            setWildcardIconPercentage(oldWcPercentage);
+            progressWildcardPercentage.textContent = String(oldWcPercentage);
             await enterSceneAnimated("progress-scene");
             if (!isTutorial) {
                 this.totalScore += us;
@@ -1503,7 +1646,38 @@ class LeveledGame {
                     new Count(progressTotalStars, oldScore, this.totalScore),
                     new Count(progressLevelStars, 0, us),
                 );
-                // Wildcard animation...
+                // Wildcard progress...
+                if (!allWcsObtained) {
+                    let unlockedCard = false;
+                    if (us > ls) {
+                        ++wildcardManager.nextCardProgress;
+                        unlockedCard = wildcardManager.nextCardProgress
+                            == wildcardManager.levelsNeeded();
+                    }
+                    else if (us < ls) {
+                        wildcardManager.nextCardProgress = 0;
+                    }
+                    if (us != ls) {
+                        const newWcPercentage =
+                            wildcardManager.getProgressPercentage();
+                        await runAnimation(1000, null,
+                            new WildcardIconGrow(
+                                oldWcPercentage, newWcPercentage),
+                            new Count(progressWildcardPercentage,
+                                oldWcPercentage, newWcPercentage),
+                        );
+                    }
+                    if (unlockedCard) {
+                        const id = wildcardManager.obtainOneCard();
+                        const wc = Wildcards[wildcardIdToName.get(id)];
+                        setWildcardIconUV(unlockedWildcardIcon, wc.uv);
+                        unlockedWildcardIcon.classList.remove("display-none");
+                        wildcardManager.nextCardProgress = 0;
+                        await runAnimation(
+                            500, null, new Scale(unlockedWildcardIcon, 1, 0)
+                        );
+                    }
+                }
             }
             await runAnimation(300, null, new FadeIn(progressButtons));
             // If the user loses they only have the option to leave;
@@ -1544,7 +1718,7 @@ export function onCustomGame() {}
 
 const popupLayer = document.getElementById("popup-layer");
 
-let activePopup;
+let activePopup = null;
 
 async function summonPopup(name) {
     const popup = document.getElementById(name);
@@ -1554,23 +1728,23 @@ async function summonPopup(name) {
     await runAnimation(300, null, new FadeIn(popupLayer));
 }
 
-async function hidePopup() {
+export async function hidePopup() {
     popupLayer.classList.add("fading");
+    const fadingPopup = activePopup;
+    activePopup = null;
     await runAnimation(300, null, new FadeOut(popupLayer));
-    document.getElementById(activePopup).classList.remove("visible");
+    document.getElementById(fadingPopup).classList.remove("visible");
     popupLayer.classList.remove("fading", "visible");
 }
 
-export let onPopupYes;
-export let onPopupNo;
+export let onQuit;
 
 export function onExitGame() {
     summonPopup("exit-confirm-popup");
-    onPopupYes = async () => {
+    onQuit = async () => {
         await hidePopup();
         game.inGameAbort();
     };
-    onPopupNo = hidePopup;
 }
 
 let noLeaveConfirm = false;
@@ -1581,14 +1755,19 @@ export function onLeave() {
     }
     else {
         summonPopup("exit-confirm-popup");
-        onPopupYes = async () => {
+        onQuit = async () => {
             await hidePopup();
             game.progress(false);
         };
-        onPopupNo = hidePopup;
     }
 }
 
 export function onContinue() {
     game.progress(true);
+}
+
+export function onWildcardMenu() {
+    summonPopup("wildcard-popup");
+    wildcardInfoBox.classList.add("display-none");
+    wildcardNoInfoHint.classList.remove("display-none");
 }

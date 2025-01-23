@@ -163,6 +163,7 @@ STATIC_FILES = [
     "card.svg",
     "star.svg",
     "button_border.png",
+    "wildcard_sprites.png",
     "favicon.ico",
 ]
 
