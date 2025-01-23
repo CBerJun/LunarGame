@@ -112,7 +112,7 @@ let blackStarIcon;
 let whiteStarIcon;
 let AIMove;
 
-externalSvg("card.svg")
+externalSvg("images/card.svg")
     .then(cardSvg2 => {
         cardSvg = cardSvg2;
         // Start the loading animation:
@@ -128,7 +128,7 @@ externalSvg("card.svg")
             loadingAnimState %= moonPhases.length;
             c.add(moonPhases[loadingAnimState]);
         }, 200);
-        return externalSvg("star.svg");
+        return externalSvg("images/star.svg");
     })
     .then(starSvg2 => {
         starSvg = starSvg2;

@@ -160,11 +160,8 @@ STATIC_FILES = [
     "index.html",
     "lunar.css",
     "backend.wasm",
-    "card.svg",
-    "star.svg",
-    "button_border.png",
-    "wildcard_sprites.png",
     "favicon.ico",
+    *glob.iglob("images/*", root_dir="src/frontend"),
 ]
 
 def _make_static_builder(file: str):
@@ -188,6 +185,8 @@ def main() -> int:
         os.mkdir("build")
     with contextlib.suppress(FileExistsError):
         os.mkdir("dist")
+    with contextlib.suppress(FileExistsError):
+        os.mkdir("dist/images")
     return (
         build_boards_glue()
         or build_consts_glue()

@@ -575,7 +575,7 @@ button.ui {
     );
     color: white;
     border-style: solid;
-    border-image: url("button_border.png") 30 / 0.7em / 0.1em;
+    border-image: url("images/button_border.png") 30 / 0.7em / 0.1em;
     padding: 0.2em 0.6em;
 }
 button.ui:enabled {
@@ -590,7 +590,7 @@ button.ui:enabled:hover {
 }
 
 .wildcard-sprite {
-    background-image: url("wildcard_sprites.png");
+    background-image: url("images/wildcard_sprites.png");
     /*
         Our sprites have transparent pixels. Some widgets (like buttons)
         have default background color and we don't want that.
