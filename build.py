@@ -111,6 +111,7 @@ EXPORTED_C_FUNCTIONS = [
     "free",
     "PatternNode_DeleteChain",
     "GameBoard_Delete",
+    "GameBoard_DestroyCard",
 ]
 
 @builder("src/frontend/backend.js", ALL_BACKEND_DEPENDENCIES)

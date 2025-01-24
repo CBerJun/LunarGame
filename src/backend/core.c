@@ -25,6 +25,21 @@ void SlotNode_ChainPopFront(SlotNode **head) {
     *head = new_head;
 }
 
+void SlotNode_ChainRemove(SlotNode **head, int slot_id) {
+    for (SlotNode *prev = NULL, *cur = *head; cur; cur = cur->next) {
+        if (cur->slot_id == slot_id) {
+            if (prev == NULL) {  // `cur` is head
+                SlotNode_ChainPopFront(head);
+            }
+            else {
+                prev->next = cur->next;
+                free(cur);
+            }
+        }
+        prev = cur;
+    }
+}
+
 SlotNode *SlotNode_DuplicateChain(const SlotNode *node, SlotNode **out_tail) {
     if (node == NULL) {
         return NULL;
@@ -341,4 +356,18 @@ PatternNode *GameBoard_PutCard(
     HashMap_ITER_END
     HashMap_Delete(cycles_seen);
     return patterns;
+}
+
+void GameBoard_DestroyCard(GameBoard *board, int slot_id) {
+    SlotData *data = &board->slots[slot_id];
+    for (SlotNode *n = data->lc_predecessors; n; n = n->next) {
+        SlotNode_ChainRemove(&board->slots[n->slot_id].lc_successors, slot_id);
+    }
+    for (SlotNode *n = data->lc_successors; n; n = n->next) {
+        SlotNode_ChainRemove(
+            &board->slots[n->slot_id].lc_predecessors, slot_id
+        );
+    }
+    SlotData_Deinit(data);
+    SlotData_Init(data);
 }

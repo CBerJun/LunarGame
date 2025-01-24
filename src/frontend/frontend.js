@@ -572,7 +572,7 @@ class Game {
             dialogueBox.style.height = gh(wrapperRect.height * px2gh);
         }
         // Render the board
-        const numSlots = backend.getValue(
+        this.numSlots = backend.getValue(
             this.board + backendConst.GameBoardNumSlots, int
         );
         const yLenNoPadding = backend.getValue(
@@ -592,7 +592,7 @@ class Game {
             db + backendConst.DisplayableBoardSlotPos, '*'
         );
         const slotPos = [];
-        for (let i = 0; i < numSlots; ++i) {
+        for (let i = 0; i < this.numSlots; ++i) {
             slotPos.push([
                 backend.getValue(slotPosPtr + backendConst.SlotPosX, int),
                 backend.getValue(slotPosPtr + backendConst.SlotPosY, int),
@@ -612,7 +612,8 @@ class Game {
             + Q * scaleX;
         const edgesOffsetY = (svgRect.y - floatingLayerRect.y) * px2gh
             + Q * scaleY;
-        for (let i = 0; i < numSlots; ++i) {
+        this.adjList = [];
+        for (let i = 0; i < this.numSlots; ++i) {
             const p1 = slotPos[i];
             // Vertex
             const centerPosX = edgesOffsetX + scaleX * p1[0];
@@ -640,11 +641,14 @@ class Game {
             button.append(buttonIndicator);
             slotsDiv.append(button);
             // Edges
+            const neighbors = [];
+            this.adjList.push(neighbors);
             let node = backend.getValue(adjPtr, '*');
             while (!backend._Glue_IsNull(node)) {
                 const slotId = backend.getValue(
                     node + backendConst.SlotNodeSlotId, int
                 );
+                neighbors.push(slotId);
                 const hash = hashEdge(slotId, i);
                 if (!this.edges.has(hash)) {
                     const p2 = slotPos[slotId];
@@ -771,30 +775,34 @@ class Game {
             this.lunarCardX(cardIndex)
         ));
     }
-    async enableUserInput() {  // override-able
-        await this.dealUserCard(this.userPlayedCard);
+    enableUserInput() {  // override-able
+        this.acceptUserInput = true;
         // Allow user to pick a card and place it
         slotsDiv.classList.add("enabled");
         userHandDiv.classList.add("enabled");
+    }
+    userRoundBegin() {  // override-able
+        return this.dealUserCard(this.userPlayedCard);
     }
     showWildcards() {  // override-able
         return wildcardManager.wildcards.size > 0;
     }
     async userRound(onRecvUserMove=null) {
-        await this.enableUserInput();
+        await this.userRoundBegin();
         if (this.showWildcards()) {
             wildcardsButton.removeAttribute("disabled");
         }
         // Select the middle card by default
         this.updateUserCardSelection(Math.floor(this.cardsInAHand / 2));
         // Wait for user input
-        this.acceptUserInput = true;
+        this.enableUserInput();
         await new Promise((resolve, reject) => {
             this.userPlaceCardEndCallbacks = {resolve, reject};
             this.onRecvUserMove = onRecvUserMove;
         });
     }
-    disableUserInput(slotId) {  // override-able
+    disableUserInput() {  // override-able
+        this.acceptUserInput = false;
         slotsDiv.classList.remove("enabled");
         userHandDiv.classList.remove("enabled");
     }
@@ -842,7 +850,9 @@ class Game {
         return false;
     }
     async onUserPlaceCard(slotId) {
-        this.acceptUserInput = false;
+        const card = this.userHand[this.userCardSelection];
+        // Turn off input
+        this.disableUserInput();
         if (this.showWildcards()) {
             wildcardsButton.setAttribute("disabled", "");
         }
@@ -850,11 +860,9 @@ class Game {
             await this.onRecvUserMove();
         }
         ++this.slotsFilled;
-        const card = this.userHand[this.userCardSelection];
         this.userHand[this.userCardSelection] = null;
         this.userPlayedCard = this.userCardSelection;
         this.updateUserCardSelection(null);
-        this.disableUserInput(slotId);
         card.element.removeEventListener("click", card.onclick);
         const patterns = backend._Glue_PutCard(
             this.board, slotId, card.phase, backendConst.PlayerWhite
@@ -1196,6 +1204,37 @@ class Game {
         await this.scaleCards(whiteIds, largeCardScale, 1);
         await this.hideDialogueBox();
     }
+    async destroyCards(slotIds) {
+        const edges = new Set();
+        for (const slotId of slotIds) {
+            for (const neighbor of this.adjList[slotId]) {
+                edges.add(hashEdge(neighbor, slotId));
+            }
+        }
+        const edgeSymbols = [];
+        for (const edgeHash of edges) {
+            const edge = this.edges.get(edgeHash);
+            if (edge.symbol != null) {
+                edgeSymbols.push(edge.symbol);
+                edge.symbol = null;
+            }
+        }
+        await this.runAnimation(1000,
+            ...slotIds.map(slotId => new FadeOut(this.slots[slotId].card)),
+            ...edgeSymbols.map(symbol => new FadeOut(symbol)),
+        );
+        this.slotsFilled -= slotIds.length;
+        for (const slotId of slotIds) {
+            const slot = this.slots[slotId];
+            slot.card.remove();
+            slot.card = null;
+            slot.cardColor = null;
+            backend._GameBoard_DestroyCard(this.board, slotId);
+        }
+        for (const symbol of edgeSymbols) {
+            symbol.remove();
+        }
+    }
     abort() {
         this.abortController.abort();
         if (this.userPlaceCardEndCallbacks != undefined) {
@@ -1368,17 +1407,21 @@ class TutorialGame extends Game {
     showWildcards() {  // override
         return false;
     }
-    async enableUserInput() {  // override
-        await this.dealUserCard(0, this.userForceOp.phase);
+    enableUserInput() {  // override
+        this.acceptUserInput = true;
         // Force user to play the card at a certain slot
         this.slots[this.userForceOp.slotId].button.classList.add("forced");
         userHandDiv.classList.add("enabled");
     }
+    userRoundBegin() {  // override
+        return this.dealUserCard(0, this.userForceOp.phase);
+    }
     filterSlot(slotId) {  // override
         return slotId != this.userForceOp.slotId;
     }
-    disableUserInput(slotId) {  // override
-        this.slots[slotId].button.classList.remove("forced");
+    disableUserInput() {  // override
+        this.acceptUserInput = false;
+        this.slots[this.userForceOp.slotId].button.classList.remove("forced");
         userHandDiv.classList.remove("enabled");
     }
     computerStartThinking() {  // override
@@ -1400,9 +1443,13 @@ const Wildcards = {
             "Destroy all cards controlled by the Half Moon on the board.",
         uv: [0, 0],
         async run(game) {
-            await game.showDialogueBox("Hunter Moon!");
-            // ...
-            await game.hideDialogueBox();
+            const slotIds = [];
+            for (let i = 0; i < game.numSlots; ++i) {
+                if (game.slots[i].cardColor == "black") {
+                    slotIds.push(i);
+                }
+            }
+            await game.destroyCards(slotIds);
         },
     },
 };
@@ -1454,9 +1501,20 @@ function addWildcardToDom(id) {
         wildcardPlayButton.classList.toggle("display-none", playedCard);
         if (!playedCard) {
             wildcardPlayButton.onclick = async (event) => {
+                const gm = game.game;
+                gm.disableUserInput();
                 await hidePopup();
                 playedWildcards.add(id);
-                await wc.run(game.game);
+                try {
+                    await wc.run(gm);
+                }
+                catch (exc) {
+                    if (exc === ABORTED) {
+                        return;
+                    }
+                    throw exc;
+                }
+                gm.enableUserInput();
             };
         }
     });

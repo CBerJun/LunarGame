@@ -86,6 +86,7 @@ typedef struct SlotNode {
 
 void SlotNode_ChainPrepend(SlotNode **head, int slot_id);
 void SlotNode_ChainPopFront(SlotNode **head);
+void SlotNode_ChainRemove(SlotNode **head, int slot_id);
 SlotNode *SlotNode_DuplicateChain(const SlotNode *node, SlotNode **out_tail);
 SlotNode *SlotNode_NewReversedChain(const SlotNode *node);
 void SlotNode_DeleteChain(SlotNode *node);
@@ -154,6 +155,7 @@ void PatternNode_DeleteChain(PatternNode *node);
 PatternNode *GameBoard_PutCard(
     GameBoard *board, int slot_id, MoonPhase phase, Player player
 );
+void GameBoard_DestroyCard(GameBoard *board, int slot_id);
 
 /* boards.c */
 
