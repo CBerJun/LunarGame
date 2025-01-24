@@ -801,8 +801,8 @@ class Game {
     computerStartThinking() {  // override-able
         this.prepareLunarCard(this.lunarPlayedCard);
         let aiDepth = this.aiLevel;
-        if (aiDepth == AILevel.WEAK) { /* !!!! */
-            aiDepth = Math.random() >= 2 ? AILevel.GREEDY : 0;
+        if (aiDepth == AILevel.WEAK) {
+            aiDepth = Math.random() >= 0.5 ? AILevel.GREEDY : 0;
         }
         this.didInvokeCAI = aiDepth > 0;
         if (this.didInvokeCAI) {
