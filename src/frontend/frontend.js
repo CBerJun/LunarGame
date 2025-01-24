@@ -1249,7 +1249,7 @@ class TutorialGame extends Game {
             "You're playing against the Half Moon. You'll take turns placing"
             + " moon cards on the board competing to score the most points."
         );
-        await this.sleep(6000);
+        await this.sleep(4500);
         // Computer goes first in tutorial
         this.lunarForceOp = {phase: 1, slotId: 0};
         this.computerStartThinking();
