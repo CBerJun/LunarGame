@@ -194,6 +194,7 @@ span#user-score-text {
 button#wildcards-button {
     transition: opacity 0.2s;
     float: right;
+    margin-bottom: 0.6em;
 }
 button#wildcards-button:enabled {
     opacity: 1;
