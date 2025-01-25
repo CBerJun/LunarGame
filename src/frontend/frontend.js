@@ -1452,6 +1452,55 @@ const Wildcards = {
             await game.destroyCards(slotIds);
         },
     },
+    LEONIDS_METEOR_SHOWER: {
+        id: 3,
+        name: "Leonids Meteor Shower",
+        origin: "October",
+        description: "Destroy 2 random cards on the board.",
+        uv: [3, 0],
+        async run(game) {
+            const slotIds = [];
+            for (let i = 0; i < game.numSlots; ++i) {
+                if (game.slots[i].cardColor != null) {
+                    slotIds.push(i);
+                }
+            }
+            let destroys;
+            if (slotIds.length > 2) {
+                const aIdx = randomInt(slotIds.length);
+                const a = slotIds[aIdx];
+                slotIds.splice(aIdx, 1);
+                const b = slotIds[randomInt(slotIds.length)];
+                destroys = [a, b];
+            }
+            else {
+                destroys = slotIds;
+            }
+            await game.destroyCards(destroys);
+        },
+    },
+    QUADRANTIDS_METEOR_SHOWER: {
+        id: 9,
+        name: "Quadrantids Meteor Shower",
+        origin: "December",
+        description: "Randomly destroys half the cards on the board.",
+        uv: [1, 2],
+        async run(game) {
+            const pool = [];
+            for (let i = 0; i < game.numSlots; ++i) {
+                if (game.slots[i].cardColor != null) {
+                    pool.push([Math.random(), i]);
+                }
+            }
+            pool.sort((a, b) => a[0] - b[0]);
+            const destroys = [];
+            const numToDestroy = Math.ceil(pool.length / 2);
+            for (let i = 0; i < numToDestroy; ++i) {
+                destroys.push(pool[i][1]);
+            }
+            await game.destroyCards(destroys);
+        },
+    },
 };
 const wildcardNames = Object.getOwnPropertyNames(Wildcards);
 const wildcardIds = wildcardNames.map(name => Wildcards[name].id);
