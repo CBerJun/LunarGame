@@ -1460,8 +1460,6 @@ const wildcardIdToName = new Map(wildcardNames.map(
     (name) => [Wildcards[name].id, name]
 ));
 
-const wildcardSpriteUnit = 100;  // px; corresponds to wildcard_sprites.png
-
 // "lunar-wildcards" local storage is a JSON array of wildcard IDs.
 
 const wildcardMenu = document.getElementById("wildcard-menu");
@@ -1474,8 +1472,10 @@ const wildcardInfoBox = document.getElementById("wildcard-info-box");
 const wildcardNoInfoHint = document.getElementById("wildcard-no-info-hint");
 
 function setWildcardIconUV(element, uv) {
-    element.style.backgroundPositionX = `-${wildcardSpriteUnit * uv[0]}px`;
-    element.style.backgroundPositionY = `-${wildcardSpriteUnit * uv[1]}px`;
+    element.style.backgroundPositionX =
+        `calc(-${uv[0]} * var(--wildcard-sprite-size))`;
+    element.style.backgroundPositionY =
+        `calc(-${uv[1]} * var(--wildcard-sprite-size))`;
 }
 
 const playedWildcards = new Set();
