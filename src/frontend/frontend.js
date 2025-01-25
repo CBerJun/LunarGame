@@ -1259,7 +1259,6 @@ class Game {
         cardSelectionBox.style.opacity = "0";
         dialogueBox.style.opacity = "0";
         wildcardsButton.setAttribute("disabled", "");
-        resetWildcardMenu();
     }
 }
 
@@ -1479,10 +1478,6 @@ function setWildcardIconUV(element, uv) {
 }
 
 const playedWildcards = new Set();
-
-function resetWildcardMenu() {
-    playedWildcards.clear();
-}
 
 function addWildcardToDom(id) {
     const wc = Wildcards[wildcardIdToName.get(id)];
@@ -1748,6 +1743,7 @@ class LeveledGame {
                 ++level;
             }
         }
+        playedWildcards.clear();
         await fadeOutCurrentScene();
         if (!this.game.cleanedDom) {
             this.game.cleanDom();
