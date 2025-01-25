@@ -1253,6 +1253,7 @@ class Game {
         clearChildren(lunarHandDiv);
         clearChildren(userHandDiv);
         clearChildren(gameBoardCardsDiv);
+        clearChildren(starsDiv);
         slotsDiv.classList.remove("enabled");
         userHandDiv.classList.remove("enabled");
         cardSelectionBox.style.opacity = "0";
