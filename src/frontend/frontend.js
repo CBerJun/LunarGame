@@ -1753,7 +1753,7 @@ class WildcardManager {
     levelsNeeded() {
         // 2 levels needed for first 4 wildcards and 3 levels for
         // subsequent ones.
-        return this.wildcards.length >= 4 ? 3 : 2;
+        return this.wildcards.size >= 4 ? 3 : 2;
     }
     getProgressPercentage() {
         return Math.round(100 * this.nextCardProgress / this.levelsNeeded());
