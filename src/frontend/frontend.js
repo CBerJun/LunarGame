@@ -562,7 +562,8 @@ class Game {
             db + backendConst.DisplayableBoardBoard, '*'
         );
         this.userCardSelection = null;
-        this.acceptUserInput = false;
+        this.userHandInputEnabled = false;
+        this.emptySlotsInputEnabled = false;
         this.abortController = new AbortController();
         this.abortSignal = this.abortController.signal;
         this.cleanedDom = false;
@@ -647,15 +648,10 @@ class Game {
             this.slots.push(new BoardSlot(centerPosX, centerPosY, button));
             button.type = "button";
             button.addEventListener("click", (event) => {
-                if (!this.acceptUserInput || this.filterSlot(i)) {
+                if (!this.emptySlotsInputEnabled || this.filterSlot(i)) {
                     return;
                 }
-                this.onUserPlaceCard(i)
-                    .then(this.userPlaceCardEndCallbacks.resolve)
-                    .catch(this.userPlaceCardEndCallbacks.reject)
-                    .finally(() => {
-                        this.userPlaceCardEndCallbacks = undefined;
-                    });
+                this.onUserPlaceCard(i);
             });
             button.style.left = gh(centerPosX - halfSlotButtonSize);
             button.style.top = gh(centerPosY - halfSlotButtonSize);
@@ -764,7 +760,7 @@ class Game {
         }
         const card = newCard();
         const onclick = (event) => {
-            if (!this.acceptUserInput) {
+            if (!this.userHandInputEnabled) {
                 return;
             }
             this.updateUserCardSelection(cardIndex);
@@ -803,7 +799,8 @@ class Game {
         ));
     }
     enableUserInput() {  // override-able
-        this.acceptUserInput = true;
+        this.userHandInputEnabled = true;
+        this.emptySlotsInputEnabled = true;
         // Allow user to pick a card and place it
         slotsDiv.classList.add("enabled");
         userHandDiv.classList.add("enabled");
@@ -829,7 +826,8 @@ class Game {
         });
     }
     disableUserInput() {  // override-able
-        this.acceptUserInput = false;
+        this.userHandInputEnabled = false;
+        this.emptySlotsInputEnabled = false;
         slotsDiv.classList.remove("enabled");
         userHandDiv.classList.remove("enabled");
     }
@@ -876,7 +874,15 @@ class Game {
     filterSlot(slotId) {  // override-able
         return false;
     }
-    async onUserPlaceCard(slotId) {
+    onUserPlaceCard(slotId) {
+        this.onUserPlaceCardInner(slotId)
+            .then(this.userPlaceCardEndCallbacks.resolve)
+            .catch(this.userPlaceCardEndCallbacks.reject)
+            .finally(() => {
+                this.userPlaceCardEndCallbacks = undefined;
+            });
+    }
+    async onUserPlaceCardInner(slotId) {
         const card = this.userHand[this.userCardSelection];
         // Turn off input
         this.disableUserInput();
@@ -1485,7 +1491,8 @@ class TutorialGame extends Game {
         return false;
     }
     enableUserInput() {  // override
-        this.acceptUserInput = true;
+        this.userHandInputEnabled = true;
+        this.emptySlotsInputEnabled = true;
         // Force user to play the card at a certain slot
         this.slots[this.userForceOp.slotId].button.classList.add("forced");
         userHandDiv.classList.add("enabled");
@@ -1497,7 +1504,8 @@ class TutorialGame extends Game {
         return slotId != this.userForceOp.slotId;
     }
     disableUserInput() {  // override
-        this.acceptUserInput = false;
+        this.userHandInputEnabled = false;
+        this.emptySlotsInputEnabled = false;
         this.slots[this.userForceOp.slotId].button.classList.remove("forced");
         userHandDiv.classList.remove("enabled");
     }
@@ -1716,6 +1724,37 @@ const Wildcards = {
             "PerkLightOfMars",
             "Your Lunar Cycles will be worth +2 points."
         ),
+    },
+    CAPRICORN: {
+        id: 11,
+        name: "Capricorn",
+        origin: "December",
+        description:
+            "Lets you place your card on top of another card on the board for"
+            + " your current turn.",
+        uv: [3, 2],
+        async run(game) {
+            const selectable = rangeFilter(
+                game.numSlots, i => game.slots[i].cardColor != null
+            );
+            if (selectable.length == 0) {
+                await noCardToChooseFrom(game);
+                return DO_NOT_CONSUME;
+            }
+            await game.showDialogueBox(
+                "You may place your card on top of another card."
+            );
+            game.userHandInputEnabled = true;
+            userHandDiv.classList.add("enabled");
+            const slotId = await askForSlot(game, selectable);
+            game.userHandInputEnabled = false;
+            userHandDiv.classList.remove("enabled");
+            await game.hideDialogueBox();
+            await game.destroyCards([slotId]);
+            setTimeout(() => {
+                game.onUserPlaceCard(slotId);
+            }, 0);
+        },
     },
     AQUARIUS: {
         id: 12,
