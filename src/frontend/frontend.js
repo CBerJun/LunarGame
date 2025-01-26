@@ -673,6 +673,7 @@ class Game {
         this.slotsFilled = 0;
         this.lunarScore = this.userScore = 0;
         this.perks = 0;
+        this.aquarius = false;
         cardSelectionBox.style.top = gh(this.userCardsY);
         userScoreText.textContent = "0";
         lunarScoreText.textContent = "0";
@@ -1209,10 +1210,10 @@ class Game {
             );
         }
     }
-    async bonusStarsProcedure(bonus, color) {
+    async bonusStarsProcedure(bonus, color, message="Wildcard bonus") {
         const plural = bonus > 1 ? "s" : "";
         const [, stars] = await Promise.all([
-            this.showDialogueBox(`Wildcard bonus! +${bonus} point${plural}!`),
+            this.showDialogueBox(`${message}! +${bonus} point${plural}!`),
             this.showBonusStars(bonus, color),
         ]);
         await this.sleep(200);
@@ -1245,12 +1246,14 @@ class Game {
         await this.hideStars(stars2, "white");
         await this.scaleCards(whiteIds, largeCardScale, 1);
         await this.hideDialogueBox();
-        let bonus = 0;
-        if (this.perks & backendConst.PerkLightOfVenus) {
-            bonus += whiteIds.length;
+        const whitePoint = whiteIds.length;
+        if ((this.perks & backendConst.PerkLightOfVenus) && whitePoint > 0) {
+            await this.bonusStarsProcedure(
+                whitePoint, "white", "Light of Venus"
+            );
         }
-        if (bonus > 0) {
-            await this.bonusStarsProcedure(bonus, "white");
+        if (this.aquarius) {
+            await this.bonusStarsProcedure(10, "white", "Aquarius");
         }
     }
     async destroyCards(slotIds) {
@@ -1483,6 +1486,12 @@ class TutorialGame extends Game {
     }
 }
 
+async function perkMessage(game, message) {
+    await game.showDialogueBox(message);
+    await game.sleep(1500);
+    await game.hideDialogueBox();
+}
+
 function perkSetter(perkName, message) {
     return async (game) => {
         const perkFlag = backendConst[perkName];
@@ -1491,9 +1500,7 @@ function perkSetter(perkName, message) {
         backend.setValue(
             perksPtr, backend.getValue(perksPtr, int) | perkFlag, int
         );
-        await game.showDialogueBox(message);
-        await game.sleep(1500);
-        await game.hideDialogueBox();
+        await perkMessage(game, message);
     };
 }
 
@@ -1636,6 +1643,20 @@ const Wildcards = {
             "PerkLightOfMars",
             "Your Lunar Cycles will be worth +2 points."
         ),
+    },
+    AQUARIUS: {
+        id: 12,
+        name: "Aquarius",
+        origin: "January",
+        description: "Get 10 extra points at the end of current level.",
+        uv: [0, 3],
+        async run(game) {
+            game.aquarius = true;
+            await perkMessage(
+                game,
+                "You will get 10 extra points at the end of this level."
+            );
+        },
     },
     LIGHT_OF_VENUS: {
         id: 13,
