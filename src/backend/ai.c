@@ -16,6 +16,7 @@ static void forkGameBoard(const GameBoard *board, GameBoard *to) {
     to->adj = board->adj;
     to->black_stars = board->black_stars;
     to->white_stars = board->white_stars;
+    to->perks = board->perks;
     for (int i = 0; i < to->num_slots; ++i) {
         SlotData *data = &to->slots[i];
         SlotData_Deinit(data);
@@ -32,13 +33,15 @@ static void forkGameBoard(const GameBoard *board, GameBoard *to) {
 
 static float heuristic(const GameBoard *board) {
     int res = board->black_stars - board->white_stars;
+    const int my_mult = (board->perks & PERK_SCORPIO) == 0;
+    const int opponent_mult = (board->perks & PERK_LIGHT_OF_VENUS) + 1;
     for (int i = 0; i < board->num_slots; ++i) {
         switch (board->slots[i].owner) {
         case P_BLACK:
-            ++res;
+            res += my_mult;
             break;
         case P_WHITE:
-            --res;
+            res -= opponent_mult;
             break;
         case P_NULL:  /* to avoid -Wswitch */
             break;

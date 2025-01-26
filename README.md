@@ -93,7 +93,8 @@ and [January 23][doodle4] of 2025.
     * **Beaver Moon**: flips a card on the board horizontally, or change New
       Moons into Full Moons and vice versa. If that helps you form patterns,
       you get points and claim the cards as normal.
-    * **Sagittarius**: the next match you make will be worth triple points.
+    * **Sagittarius**: the next match you make will be worth triple points. If
+      you make multiple matches in one move, all get tripled.
     * **Geminid Meteor Shower**: lets you claim half of the computer's claimed
       cards on the board.
   - December
@@ -109,7 +110,7 @@ and [January 23][doodle4] of 2025.
     * **Aquarius**: get 10 extra points at the end of current level.
     * **Light of Venus**: get 1 extra point for each card you've claimed at the
       end of current level.
-    * **Moon at Apogee**: makes all of the computer's matches worth 1 star for
+    * **Moon at Apogee**: makes all of the computer's matches worth 1 point for
       the current level.
     * **Wolf Moon**: choose 1 of the cards claimed by the computer to destroy
       that card and all cards that are directly connected to it and claimed by

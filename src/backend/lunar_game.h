@@ -110,6 +110,21 @@ typedef struct SlotData {
 void SlotData_Init(SlotData *data);
 void SlotData_Deinit(SlotData *data);
 
+// Full Moon Pairs x2 points for white
+#define PERK_SUPER_MOON 0x1
+// No end game bonus for black
+#define PERK_SCORPIO 0x2
+// White claimed cards cannot be stolen
+#define PERK_WINTER_SOLSTICE 0x4
+// Next match by white x3 points
+#define PERK_SAGITTARIUS 0x8
+// Lunar Cycles +2 points for white
+#define PERK_LIGHT_OF_MARS 0x10
+// End game bonus x2 for white
+#define PERK_LIGHT_OF_VENUS 0x20
+// All matches worth 1 point for black
+#define PERK_MOON_AT_APOGEE 0x40
+
 typedef struct GameBoard {
     // Game board
     int num_slots;
@@ -118,6 +133,7 @@ typedef struct GameBoard {
     // Game states
     int white_stars;
     int black_stars;
+    int perks;
 } GameBoard;
 
 GameBoard *GameBoard_New(int num_slots);

@@ -214,9 +214,10 @@ const cardSize = slotButtonSize * 1.48;
 const cardGap = cardSize * 0.2;
 const lunarCard2CardScale = 1.35;
 const lunarCardSize = cardSize / lunarCard2CardScale;
-const bonusStarInitialPad = 3;  // gh
-const bonusStarGap = 1.5  // gh
-const largeCardScale = 1.2
+// TODO don't hard code these...
+const bonusStarInitialPad = 10;  // gh
+const bonusStarGap = 4;  // gh
+const largeCardScale = 1.2;
 
 const halfSlotButtonSize = slotButtonSize / 2;
 const halfCardSize = cardSize / 2;
@@ -671,6 +672,7 @@ class Game {
         // Misc...
         this.slotsFilled = 0;
         this.lunarScore = this.userScore = 0;
+        this.perks = 0;
         cardSelectionBox.style.top = gh(this.userCardsY);
         userScoreText.textContent = "0";
         lunarScoreText.textContent = "0";
@@ -1072,6 +1074,25 @@ class Game {
         }
     }
     async showPatterns(patterns, subjectSlot, color) {
+        const fullMoonBonus = (
+            color == "white" && (this.perks & backendConst.PerkSuperMoon)
+        ) ? 2 : 0;
+        const lunarCycleBonus = (
+            color == "white" && (this.perks & backendConst.PerkLightOfMars)
+        ) ? 2 : 0;
+        const alwaysOnePoint = (
+            color == "black" && (this.perks & backendConst.PerkMoonAtApogee)
+        );
+        const canSteal = !(
+            color == "black" && (this.perks & backendConst.PerkWinterSolstice)
+        );
+        const triplePoints = (
+            color == "white" && (this.perks & backendConst.PerkSagittarius)
+        );
+        // Sagittarius is one-shot
+        if (triplePoints && !backend._Glue_IsNull(patterns)) {
+            this.perks &= ~backendConst.PerkSagittarius;
+        }
         let node = patterns;
         while (!backend._Glue_IsNull(node)) {
             const pattern = backend.getValue(
@@ -1079,7 +1100,7 @@ class Game {
             );
             const kind = backend._Glue_PatternKind(pattern);
             let text;
-            let starredSlots;
+            let starredSlots = [subjectSlot];
             let showStarsOneByOne = false;
             const occupiedSlots = [];
             const edgeAnimations = [];
@@ -1090,7 +1111,6 @@ class Game {
                 const otherId = backend.getValue(
                     pattern + backendConst.PatternOtherId, int
                 );
-                starredSlots = [subjectSlot];
                 occupiedSlots.push(subjectSlot, otherId);
                 edgeAnimations.push(new FadeIn(
                     this.phasePairSymbol(subjectSlot, otherId)
@@ -1102,7 +1122,10 @@ class Game {
                 const otherId = backend.getValue(
                     pattern + backendConst.PatternOtherId, int
                 );
-                starredSlots = occupiedSlots;
+                if (!alwaysOnePoint) {
+                    starredSlots = occupiedSlots;
+                    bonus += fullMoonBonus;
+                }
                 occupiedSlots.push(subjectSlot, otherId);
                 edgeAnimations.push(new FadeIn(
                     this.fullMoonSymbol(subjectSlot, otherId)
@@ -1129,7 +1152,10 @@ class Game {
                         node + backendConst.SlotNodeNext, '*'
                     );
                 }
-                starredSlots = occupiedSlots;
+                if (!alwaysOnePoint) {
+                    starredSlots = occupiedSlots;
+                    bonus += lunarCycleBonus;
+                }
                 text = `Lunar Cycle of ${occupiedSlots.length}`;
                 showStarsOneByOne = true;
                 break;
@@ -1137,7 +1163,19 @@ class Game {
             default:
                 throw `invalid pattern kind ${kind}`;
             }
-            for (const slotId of occupiedSlots) {
+            if (triplePoints) {
+                bonus += 2 * (bonus + starredSlots.length);
+            }
+            let owningSlots;
+            if (canSteal) {
+                owningSlots = occupiedSlots;
+            }
+            else {
+                owningSlots = occupiedSlots.filter(
+                    slotId => this.slots[slotId].cardColor == "gray"
+                );
+            }
+            for (const slotId of owningSlots) {
                 this.slots[slotId].setCardColor("gray");
             }
             // Set animations to initial states
@@ -1149,7 +1187,7 @@ class Game {
                 this.scaleCards(occupiedSlots, 1, largeCardScale),
             ]);
             await this.sleep(500);
-            for (const slotId of occupiedSlots) {
+            for (const slotId of owningSlots) {
                 this.slots[slotId].setCardColor(color);
             }
             const [stars] = await Promise.all([
@@ -1164,20 +1202,22 @@ class Game {
             await this.hideStars(stars, color);
             await this.scaleCards(occupiedSlots, largeCardScale, 1);
             if (bonus > 0) {
-                const [, stars] = await Promise.all([
-                    this.showDialogueBox("Wildcard bonus!"),
-                    this.showBonusStars(bonus, color),
-                ]);
-                await this.sleep(500);
-                await Promise.all([
-                    this.hideDialogueBox(),
-                    this.hideStars(stars, color),
-                ]);
+                await this.bonusStarsProcedure(bonus, color);
             }
             node = backend.getValue(
                 node + backendConst.PatternNodeNext, '*'
             );
         }
+    }
+    async bonusStarsProcedure(bonus, color) {
+        const plural = bonus > 1 ? "s" : "";
+        const [, stars] = await Promise.all([
+            this.showDialogueBox(`Wildcard bonus! +${bonus} point${plural}!`),
+            this.showBonusStars(bonus, color),
+        ]);
+        await this.sleep(200);
+        await this.hideStars(stars, color);
+        await this.hideDialogueBox();
     }
     async endGameBonus() {
         const blackIds = [];
@@ -1194,15 +1234,24 @@ class Game {
         }
         await this.sleep(1000);
         await this.showDialogueBox("End Bonus Points");
-        await this.scaleCards(blackIds, 1, largeCardScale);
-        const stars1 = await this.showStars(blackIds, "black");
-        await this.hideStars(stars1, "black");
-        await this.scaleCards(blackIds, largeCardScale, 1);
+        if ((this.perks & backendConst.PerkScorpio) == 0) {
+            await this.scaleCards(blackIds, 1, largeCardScale);
+            const stars1 = await this.showStars(blackIds, "black");
+            await this.hideStars(stars1, "black");
+            await this.scaleCards(blackIds, largeCardScale, 1);
+        }
         await this.scaleCards(whiteIds, 1, largeCardScale);
         const stars2 = await this.showStars(whiteIds, "white");
         await this.hideStars(stars2, "white");
         await this.scaleCards(whiteIds, largeCardScale, 1);
         await this.hideDialogueBox();
+        let bonus = 0;
+        if (this.perks & backendConst.PerkLightOfVenus) {
+            bonus += whiteIds.length;
+        }
+        if (bonus > 0) {
+            await this.bonusStarsProcedure(bonus, "white");
+        }
     }
     async destroyCards(slotIds) {
         const edges = new Set();
@@ -1434,6 +1483,27 @@ class TutorialGame extends Game {
     }
 }
 
+function perkSetter(perkName, message) {
+    return async (game) => {
+        const perkFlag = backendConst[perkName];
+        game.perks |= perkFlag;
+        const perksPtr = game.board + backendConst.GameBoardPerks;
+        backend.setValue(
+            perksPtr, backend.getValue(perksPtr, int) | perkFlag, int
+        );
+        await game.showDialogueBox(message);
+        await game.sleep(1500);
+        await game.hideDialogueBox();
+    };
+}
+
+const runScorpioPerk = perkSetter(
+    "PerkScorpio",
+    "The Half Moon won't get end game bonus points."
+);
+const scorpioDescription =
+    "The Half Moon gets no bonus points at the end of the current level.";
+
 const Wildcards = {
     HUNTER_MOON: {
         id: 0,
@@ -1451,6 +1521,26 @@ const Wildcards = {
             }
             await game.destroyCards(slotIds);
         },
+    },
+    SUPER_MOON: {
+        id: 1,
+        name: "Super Moon",
+        origin: "October",
+        description: "Make your Full Moon Pairs worth double for the current"
+            + " level.",
+        uv: [1, 0],
+        run: perkSetter(
+            "PerkSuperMoon",
+            "Your Full Moon Pairs will be worth double."
+        ),
+    },
+    SCORPIO: {
+        id: 2,
+        name: "Scorpio",
+        origin: "October",
+        description: scorpioDescription,
+        uv: [2, 0],
+        run: runScorpioPerk,
     },
     LEONIDS_METEOR_SHOWER: {
         id: 3,
@@ -1479,6 +1569,40 @@ const Wildcards = {
             await game.destroyCards(destroys);
         },
     },
+    WINTER_SOLSTICE: {
+        id: 4,
+        name: "Winter Solstice",
+        origin: "November",
+        description:
+            "Your claimed cards can not be stolen for the current level.",
+        uv: [0, 1],
+        run: perkSetter(
+            "PerkWinterSolstice",
+            "The Half Moon won't be able to steal your cards for the current"
+            + " level."
+        ),
+    },
+    SAGITTARIUS: {
+        id: 6,
+        name: "Sagittarius",
+        origin: "November",
+        description:
+            "The next match you make will be worth triple points. If you"
+            + " make multiple matches in one move, all matches get tripled.",
+        uv: [2, 1],
+        run: perkSetter(
+            "PerkSagittarius",
+            "Your next match(es) will receive triple points."
+        ),
+    },
+    LONG_NIGHT_MOON: {
+        id: 8,
+        name: "Long Night Moon",
+        origin: "December",
+        description: scorpioDescription,
+        uv: [0, 2],
+        run: runScorpioPerk,
+    },
     QUADRANTIDS_METEOR_SHOWER: {
         id: 9,
         name: "Quadrantids Meteor Shower",
@@ -1500,6 +1624,44 @@ const Wildcards = {
             }
             await game.destroyCards(destroys);
         },
+    },
+    LIGHT_OF_MARS: {
+        id: 10,
+        name: "Light of Mars",
+        origin: "December",
+        description:
+            "Makes your Lunar Cycles worth +2 points for the current level.",
+        uv: [2, 2],
+        run: perkSetter(
+            "PerkLightOfMars",
+            "Your Lunar Cycles will be worth +2 points."
+        ),
+    },
+    LIGHT_OF_VENUS: {
+        id: 13,
+        name: "Light of Venus",
+        origin: "January",
+        description:
+            "Get 1 extra point for each card you've claimed at the end of"
+            + " current level.",
+        uv: [1, 3],
+        run: perkSetter(
+            "PerkLightOfVenus",
+            "Your end game bonus points will be doubled."
+        ),
+    },
+    MOON_AT_APOGEE: {
+        id: 14,
+        name: "Moon at Apogee",
+        origin: "January",
+        description:
+            "Makes all of the computer's matches worth 1 point for the current"
+            + " level.",
+        uv: [2, 3],
+        run: perkSetter(
+            "PerkMoonAtApogee",
+            "The Half Moon's matches will all be worth 1 point."
+        ),
     },
 };
 const wildcardNames = Object.getOwnPropertyNames(Wildcards);
@@ -1548,6 +1710,7 @@ function addWildcardToDom(id) {
             wildcardPlayButton.onclick = async (event) => {
                 const gm = game.game;
                 gm.disableUserInput();
+                wildcardsButton.setAttribute("disabled", "");
                 await hidePopup();
                 playedWildcards.add(id);
                 try {
@@ -1559,6 +1722,7 @@ function addWildcardToDom(id) {
                     }
                     throw exc;
                 }
+                wildcardsButton.removeAttribute("disabled");
                 gm.enableUserInput();
             };
         }

@@ -33,6 +33,7 @@ ITEM(SlotPosY, offsetof(SlotPos, y))
 
 ITEM(GameBoardNumSlots, offsetof(GameBoard, num_slots))
 ITEM(GameBoardAdj, offsetof(GameBoard, adj))
+ITEM(GameBoardPerks, offsetof(GameBoard, perks))
 
 ITEM(SlotNodePtrSize, sizeof(SlotNode *))
 ITEM(SlotNodeSlotId, offsetof(SlotNode, slot_id))
@@ -46,3 +47,11 @@ ITEM(PatternList, offsetof(Pattern, list))
 
 ITEM(AIDecisionCardId, offsetof(AIDecision, card_id))
 ITEM(AIDecisionSlotId, offsetof(AIDecision, slot_id))
+
+ITEM(PerkSuperMoon, PERK_SUPER_MOON)
+ITEM(PerkScorpio, PERK_SCORPIO)
+ITEM(PerkWinterSolstice, PERK_WINTER_SOLSTICE)
+ITEM(PerkSagittarius, PERK_SAGITTARIUS)
+ITEM(PerkLightOfMars, PERK_LIGHT_OF_MARS)
+ITEM(PerkLightOfVenus, PERK_LIGHT_OF_VENUS)
+ITEM(PerkMoonAtApogee, PERK_MOON_AT_APOGEE)

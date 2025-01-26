@@ -89,6 +89,7 @@ GameBoard *GameBoard_New(int num_slots) {
         SlotData_Init(&g->slots[i]);
     }
     g->black_stars = g->white_stars = 0;
+    g->perks = 0;
     return g;
 }
 
@@ -228,7 +229,15 @@ PatternNode *GameBoard_PutCard(
     data->phase = phase;
     // Check for patterns
     PatternNode *patterns = NULL;
-    int *score = player == P_BLACK ? &board->black_stars : &board->white_stars;
+    int score = 0;
+    const int full_moon_points =
+        (player == P_WHITE && (board->perks & PERK_SUPER_MOON)) ? 4 : 2;
+    const int lunar_cycle_bonus =
+        (player == P_WHITE && (board->perks & PERK_LIGHT_OF_MARS)) ? 2 : 0;
+    const bool always_one_point =
+        (player == P_BLACK && (board->perks & PERK_MOON_AT_APOGEE));
+    const bool can_steal =
+        !(player == P_BLACK && (board->perks & PERK_WINTER_SOLSTICE));
     for (SlotNode *node = board->adj[slot_id]; node; node = node->next) {
         const int other_id = node->slot_id;
         SlotData *other_data = &board->slots[other_id];
@@ -241,14 +250,14 @@ PatternNode *GameBoard_PutCard(
         case 0:
             pattern = Pattern_New();
             pattern->kind = PK_PHASE_PAIR;
-            ++*score;
+            ++score;
             break;
         // Check Full Moon
         case MoonPhase_NumPhases / 2:
         case -MoonPhase_NumPhases / 2:
             pattern = Pattern_New();
             pattern->kind = PK_FULL_MOON;
-            *score += 2;
+            score += always_one_point ? 1 : full_moon_points;
             break;
         // Add data to Lunar Cycle graph
         case 1:
@@ -269,7 +278,10 @@ PatternNode *GameBoard_PutCard(
             // Phase Pair or Full Moon detected
             pattern->other_id = other_id;
             PatternNode_ChainPrepend(&patterns, pattern);
-            data->owner = other_data->owner = player;
+            data->owner = player;
+            if (can_steal || other_data->owner == P_NULL) {
+                other_data->owner = player;
+            }
         }
     }
     SlotsNode *forward = NULL, *backward = NULL;
@@ -333,14 +345,17 @@ PatternNode *GameBoard_PutCard(
         ) {
             // We've found a lunar cycle!
             HashMap_Insert(cycles_seen, (void *) bs, NULL);
-            *score += length;
+            score += always_one_point ? 1 : length + lunar_cycle_bonus;
             Pattern *new_pattern = Pattern_New();
             new_pattern->kind = PK_LUNAR_CYCLE;
             new_pattern->list = c->slots;
             PatternNode_ChainPrepend(&patterns, new_pattern);
             // Change owner of slots on the cycle
             for (SlotNode *i = c->slots; i; i = i->next) {
-                board->slots[i->slot_id].owner = player;
+                Player *owner = &board->slots[i->slot_id].owner;
+                if (can_steal || (*owner == P_NULL)) {
+                    *owner = player;
+                }
             }
         }
         else {
@@ -355,6 +370,17 @@ PatternNode *GameBoard_PutCard(
         BitSet_Delete((BitSet *) pair->key);
     HashMap_ITER_END
     HashMap_Delete(cycles_seen);
+    if (player == P_WHITE) {
+        if ((board->perks & PERK_SAGITTARIUS) && score > 0) {
+            // PERK_SAGITTARIUS is single-shot
+            board->perks &= ~PERK_SAGITTARIUS;
+            score *= 3;
+        }
+        board->white_stars += score;
+    }
+    else {
+        board->black_stars += score;
+    }
     return patterns;
 }
 
