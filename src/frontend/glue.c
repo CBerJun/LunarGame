@@ -40,3 +40,9 @@ AIDecision * EMSCRIPTEN_KEEPALIVE Glue_AIMove(
     free(new_choices);
     return res;
 }
+
+void EMSCRIPTEN_KEEPALIVE Glue_ChangeSlotOwner(
+    GameBoard *board, int slot_id, int owner
+) {
+    board->slots[slot_id].owner = (Player) owner;
+}

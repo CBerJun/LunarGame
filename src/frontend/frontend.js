@@ -270,6 +270,30 @@ function randomPhase() {
 function randomBoard() {
     return randomInt(Boards.length);
 }
+function randomChoose(items, k) {
+    if (items.length < k) {
+        throw new RangeError();
+    }
+    const pool = items.map(item => [Math.random(), item]);
+    pool.sort((a, b) => a[0] - b[0]);
+    const res = [];
+    for (let i = 0; i < k; ++i) {
+        res.push(pool[i][1]);
+    }
+    return res;
+}
+function randomChooseHalf(items) {
+    return randomChoose(items, Math.ceil(items.length / 2));
+}
+function rangeFilter(n, predicate) {
+    const res = [];
+    for (let i = 0; i < n; ++i) {
+        if (predicate(i)) {
+            res.push(i);
+        }
+    }
+    return res;
+}
 
 const ABORTED = new Error("ABORTED");
 
@@ -948,7 +972,8 @@ class Game {
         );
         await this.showAndDeletePatterns(patterns, slotId, "black");
     }
-    scaleCards(slotIds, from, to) {
+    scaleCards(slotIds, bigger) {
+        const [to, from] = bigger ? [largeCardScale, 1] : [1, largeCardScale];
         return Promise.all(slotIds.map(slotId => this.runAnimation(
             200, new Scale(this.slots[slotId].card, to, from)
         )));
@@ -1185,7 +1210,7 @@ class Game {
             }
             await Promise.all([
                 this.showDialogueBox(text),
-                this.scaleCards(occupiedSlots, 1, largeCardScale),
+                this.scaleCards(occupiedSlots, true),
             ]);
             await this.sleep(500);
             for (const slotId of owningSlots) {
@@ -1201,7 +1226,7 @@ class Game {
                 })(),
             ]);
             await this.hideStars(stars, color);
-            await this.scaleCards(occupiedSlots, largeCardScale, 1);
+            await this.scaleCards(occupiedSlots, false);
             if (bonus > 0) {
                 await this.bonusStarsProcedure(bonus, color);
             }
@@ -1236,15 +1261,15 @@ class Game {
         await this.sleep(1000);
         await this.showDialogueBox("End Bonus Points");
         if ((this.perks & backendConst.PerkScorpio) == 0) {
-            await this.scaleCards(blackIds, 1, largeCardScale);
+            await this.scaleCards(blackIds, true);
             const stars1 = await this.showStars(blackIds, "black");
             await this.hideStars(stars1, "black");
-            await this.scaleCards(blackIds, largeCardScale, 1);
+            await this.scaleCards(blackIds, false);
         }
-        await this.scaleCards(whiteIds, 1, largeCardScale);
+        await this.scaleCards(whiteIds, true);
         const stars2 = await this.showStars(whiteIds, "white");
         await this.hideStars(stars2, "white");
-        await this.scaleCards(whiteIds, largeCardScale, 1);
+        await this.scaleCards(whiteIds, false);
         await this.hideDialogueBox();
         const whitePoint = whiteIds.length;
         if ((this.perks & backendConst.PerkLightOfVenus) && whitePoint > 0) {
@@ -1520,13 +1545,9 @@ const Wildcards = {
             "Destroy all cards controlled by the Half Moon on the board.",
         uv: [0, 0],
         async run(game) {
-            const slotIds = [];
-            for (let i = 0; i < game.numSlots; ++i) {
-                if (game.slots[i].cardColor == "black") {
-                    slotIds.push(i);
-                }
-            }
-            await game.destroyCards(slotIds);
+            await game.destroyCards(rangeFilter(
+                game.numSlots, i => game.slots[i].cardColor == "black"
+            ));
         },
     },
     SUPER_MOON: {
@@ -1556,12 +1577,9 @@ const Wildcards = {
         description: "Destroy 2 random cards on the board.",
         uv: [3, 0],
         async run(game) {
-            const slotIds = [];
-            for (let i = 0; i < game.numSlots; ++i) {
-                if (game.slots[i].cardColor != null) {
-                    slotIds.push(i);
-                }
-            }
+            const slotIds = rangeFilter(
+                game.numSlots, i => game.slots[i].cardColor != null
+            );
             let destroys;
             if (slotIds.length > 2) {
                 const aIdx = randomInt(slotIds.length);
@@ -1602,6 +1620,33 @@ const Wildcards = {
             "Your next match(es) will receive triple points."
         ),
     },
+    GEMINID_METEOR_SHOWER: {
+        id: 7,
+        name: "Geminid Meteor Shower",
+        origin: "November",
+        description:
+            "Lets you claim half of the computer's claimed cards on the "
+            + "board.",
+        uv: [3, 1],
+        async run(game) {
+            const slots = randomChooseHalf(rangeFilter(
+                game.numSlots, i => game.slots[i].cardColor == "black"
+            ));
+            for (const slotId of slots) {
+                game.slots[slotId].setCardColor("gray");
+            }
+            await game.scaleCards(slots, true);
+            await game.sleep(500);
+            for (const slotId of slots) {
+                game.slots[slotId].setCardColor("white");
+                backend._Glue_ChangeSlotOwner(
+                    game.board, slotId, backendConst.PlayerWhite
+                );
+            }
+            await game.sleep(500);
+            await game.scaleCards(slots, false);
+        },
+    },
     LONG_NIGHT_MOON: {
         id: 8,
         name: "Long Night Moon",
@@ -1617,19 +1662,9 @@ const Wildcards = {
         description: "Randomly destroys half the cards on the board.",
         uv: [1, 2],
         async run(game) {
-            const pool = [];
-            for (let i = 0; i < game.numSlots; ++i) {
-                if (game.slots[i].cardColor != null) {
-                    pool.push([Math.random(), i]);
-                }
-            }
-            pool.sort((a, b) => a[0] - b[0]);
-            const destroys = [];
-            const numToDestroy = Math.ceil(pool.length / 2);
-            for (let i = 0; i < numToDestroy; ++i) {
-                destroys.push(pool[i][1]);
-            }
-            await game.destroyCards(destroys);
+            await game.destroyCards(randomChooseHalf(rangeFilter(
+                game.numSlots, i => game.slots[i].cardColor != null
+            )));
         },
     },
     LIGHT_OF_MARS: {
