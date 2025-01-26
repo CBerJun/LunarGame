@@ -492,6 +492,10 @@ svg.card.back .question-mark {
     visibility: visible;
 }
 
+svg.card.clickable {
+    cursor: pointer;
+}
+
 /* svg.star coloring */
 
 svg.star {

@@ -1511,6 +1511,42 @@ class TutorialGame extends Game {
     }
 }
 
+// --- Wildcard util functions
+
+async function askForSlot(game, slots) {
+    let promiseHandlers;
+    const clickHandlers = [];
+    for (const slotId of slots) {
+        const clickHandler = (event) => {
+            promiseHandlers.resolve(slotId);
+        };
+        clickHandlers.push(clickHandler);
+        const card = game.slots[slotId].card;
+        card.addEventListener("click", clickHandler);
+        card.classList.add("clickable");
+    }
+    function onAbort() {
+        promiseHandlers.reject(ABORTED);
+    }
+    const slotId = await new Promise((resolve, reject) => {
+        promiseHandlers = {resolve, reject};
+        game.abortSignal.addEventListener("abort", onAbort);
+    });
+    game.abortSignal.removeEventListener("abort", onAbort);
+    for (let i = 0; i < slots.length; ++i) {
+        const card = game.slots[slots[i]].card;
+        card.removeEventListener("click", clickHandlers[i]);
+        card.classList.remove("clickable");
+    }
+    return slotId;
+}
+
+async function noCardToChooseFrom(game) {
+    await game.showDialogueBox("There is no card to choose from!");
+    await game.sleep(1000);
+    await game.hideDialogueBox();
+}
+
 async function perkMessage(game, message) {
     await game.showDialogueBox(message);
     await game.sleep(1500);
@@ -1535,6 +1571,8 @@ const runScorpioPerk = perkSetter(
 );
 const scorpioDescription =
     "The Half Moon gets no bonus points at the end of the current level.";
+
+const DO_NOT_CONSUME = new Object();
 
 const Wildcards = {
     HUNTER_MOON: {
@@ -1719,6 +1757,37 @@ const Wildcards = {
             "The Half Moon's matches will all be worth 1 point."
         ),
     },
+    WOLF_MOON: {
+        id: 15,
+        name: "Wolf Moon",
+        origin: "January",
+        description:
+            "Choose 1 of the cards claimed by the Half Moon to destroy that"
+            + " card and all cards claimed by the Half Moon that are directly"
+            + " connected to it.",
+        uv: [3, 3],
+        async run(game) {
+            const selectable = rangeFilter(
+                game.numSlots, i => game.slots[i].cardColor == "black"
+            );
+            if (selectable.length == 0) {
+                await noCardToChooseFrom(game);
+                return DO_NOT_CONSUME;
+            }
+            await game.showDialogueBox(
+                "Choose a card claimed by the Half Moon"
+            );
+            const slotId = await askForSlot(game, selectable);
+            const destroying = [slotId];
+            for (const neighbor of game.adjList[slotId]) {
+                if (game.slots[neighbor].cardColor == "black") {
+                    destroying.push(neighbor);
+                }
+            }
+            await game.hideDialogueBox();
+            await game.destroyCards(destroying);
+        },
+    },
 };
 const wildcardNames = Object.getOwnPropertyNames(Wildcards);
 const wildcardIds = wildcardNames.map(name => Wildcards[name].id);
@@ -1768,9 +1837,11 @@ function addWildcardToDom(id) {
                 gm.disableUserInput();
                 wildcardsButton.setAttribute("disabled", "");
                 await hidePopup();
-                playedWildcards.add(id);
                 try {
-                    await wc.run(gm);
+                    const outcome = await wc.run(gm);
+                    if (outcome !== DO_NOT_CONSUME) {
+                        playedWildcards.add(id);
+                    }
                 }
                 catch (exc) {
                     if (exc === ABORTED) {
