@@ -1559,6 +1559,17 @@ async function askForSlot(game, slots) {
     return slotId;
 }
 
+function getLunarSlots(game) {
+    return rangeFilter(
+        game.numSlots, i => game.slots[i].cardColor == "black"
+    );
+}
+function getNonEmptySlots(game) {
+    return rangeFilter(
+        game.numSlots, i => game.slots[i].cardColor != null
+    );
+}
+
 async function noCardToChooseFrom(game) {
     await game.showDialogueBox("There is no card to choose from!");
     await game.sleep(1000);
@@ -1604,9 +1615,7 @@ const Wildcards = {
             "Destroy all cards controlled by the Half Moon on the board.",
         uv: [0, 0],
         async run(game) {
-            await game.destroyCards(rangeFilter(
-                game.numSlots, i => game.slots[i].cardColor == "black"
-            ));
+            await game.destroyCards(getLunarSlots(game));
         },
     },
     SUPER_MOON: {
@@ -1636,9 +1645,7 @@ const Wildcards = {
         description: "Destroy 2 random cards on the board.",
         uv: [3, 0],
         async run(game) {
-            const slotIds = rangeFilter(
-                game.numSlots, i => game.slots[i].cardColor != null
-            );
+            const slotIds = getNonEmptySlots(game);
             let destroys;
             if (slotIds.length > 2) {
                 const aIdx = randomInt(slotIds.length);
@@ -1676,9 +1683,7 @@ const Wildcards = {
             + " you get points and claim the cards as normal.",
         uv: [1, 1],
         async run(game) {
-            const selectable = rangeFilter(
-                game.numSlots, i => game.slots[i].cardColor != null
-            );
+            const selectable = getNonEmptySlots(game);
             if (selectable.length == 0) {
                 await noCardToChooseFrom(game);
                 return DO_NOT_CONSUME;
@@ -1727,9 +1732,7 @@ const Wildcards = {
             + "board.",
         uv: [3, 1],
         async run(game) {
-            const slots = randomChooseHalf(rangeFilter(
-                game.numSlots, i => game.slots[i].cardColor == "black"
-            ));
+            const slots = randomChooseHalf(getLunarSlots(game));
             for (const slotId of slots) {
                 game.slots[slotId].setCardColor("gray");
             }
@@ -1760,9 +1763,7 @@ const Wildcards = {
         description: "Randomly destroys half the cards on the board.",
         uv: [1, 2],
         async run(game) {
-            await game.destroyCards(randomChooseHalf(rangeFilter(
-                game.numSlots, i => game.slots[i].cardColor != null
-            )));
+            await game.destroyCards(randomChooseHalf(getNonEmptySlots(game)));
         },
     },
     LIGHT_OF_MARS: {
@@ -1786,9 +1787,7 @@ const Wildcards = {
             + " your current turn.",
         uv: [3, 2],
         async run(game) {
-            const selectable = rangeFilter(
-                game.numSlots, i => game.slots[i].cardColor != null
-            );
+            const selectable = getNonEmptySlots(game);
             if (selectable.length == 0) {
                 await noCardToChooseFrom(game);
                 return DO_NOT_CONSUME;
@@ -1858,9 +1857,7 @@ const Wildcards = {
             + " connected to it.",
         uv: [3, 3],
         async run(game) {
-            const selectable = rangeFilter(
-                game.numSlots, i => game.slots[i].cardColor == "black"
-            );
+            const selectable = getLunarSlots(game);
             if (selectable.length == 0) {
                 await noCardToChooseFrom(game);
                 return DO_NOT_CONSUME;
