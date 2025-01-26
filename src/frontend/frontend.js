@@ -515,6 +515,7 @@ class BoardSlot {
         this.button = button;
         this.card = null;
         this.cardColor = null;
+        this.phase = null;
     }
     setCardColor(color) {
         if (color != this.cardColor) {
@@ -892,22 +893,19 @@ class Game {
         if (this.onRecvUserMove != null) {
             await this.onRecvUserMove();
         }
-        ++this.slotsFilled;
         this.userHand[this.userCardSelection] = null;
         this.userPlayedCard = this.userCardSelection;
         this.updateUserCardSelection(null);
         card.element.removeEventListener("click", card.onclick);
-        const patterns = backend._Glue_PutCard(
-            this.board, slotId, card.phase, backendConst.PlayerWhite
+        const patterns = this.simplyPlaceUserCard(
+            card.phase, slotId, card.element
         );
-        const slot = this.slots[slotId];
-        slot.card = card.element;
-        slot.cardColor = "gray";
         if (this.slotsFilled != this.slots.length) {
             // As soon as the user plays their card, we could deal AI
             // the card (internally) and let it start thinking
             this.computerStartThinking();
         }
+        const slot = this.slots[slotId];
         await this.runAnimation(500,
             new TranslateX(
                 card.element, this.userCardX(this.userPlayedCard),
@@ -921,6 +919,16 @@ class Game {
         // Move card from #user-hand to #game-board-cards
         gameBoardCardsDiv.append(card.element);
         await this.showAndDeletePatterns(patterns, slotId, "white");
+    }
+    simplyPlaceUserCard(phase, slotId, cardElement) {
+        ++this.slotsFilled;
+        const slot = this.slots[slotId];
+        slot.card = cardElement;
+        slot.cardColor = "gray";
+        slot.phase = phase;
+        return backend._Glue_PutCard(
+            this.board, slotId, phase, backendConst.PlayerWhite
+        );
     }
     async computerDecisionRequired() {  // override-able
         if (!this.didInvokeCAI) {
@@ -949,6 +957,7 @@ class Game {
         // Scale and translate animation...
         slot.card = card.element;
         slot.cardColor = "gray";
+        slot.phase = card.phase;
         await this.runAnimation(500,
             new TranslateX(
                 card.element, this.lunarCardX(cardIndex),
@@ -1312,6 +1321,7 @@ class Game {
             slot.card.remove();
             slot.card = null;
             slot.cardColor = null;
+            slot.phase = null;
             backend._GameBoard_DestroyCard(this.board, slotId);
         }
         for (const symbol of edgeSymbols) {
@@ -1580,6 +1590,9 @@ const runScorpioPerk = perkSetter(
 const scorpioDescription =
     "The Half Moon gets no bonus points at the end of the current level.";
 
+// Indices here are phases
+const beaverMoonTransform = [4, 7, 6, 5, 0, 3, 2, 1];
+
 const DO_NOT_CONSUME = new Object();
 
 const Wildcards = {
@@ -1652,6 +1665,45 @@ const Wildcards = {
             "The Half Moon won't be able to steal your cards for the current"
             + " level."
         ),
+    },
+    BEAVER_MOON: {
+        id: 5,
+        name: "Beaver Moon",
+        origin: "November",
+        description:
+            "Flips a card on the board horizontally, or change New Moons into"
+            + " Full Moons and vice versa. If that helps you form patterns,"
+            + " you get points and claim the cards as normal.",
+        uv: [1, 1],
+        async run(game) {
+            const selectable = rangeFilter(
+                game.numSlots, i => game.slots[i].cardColor != null
+            );
+            if (selectable.length == 0) {
+                await noCardToChooseFrom(game);
+                return DO_NOT_CONSUME;
+            }
+            await game.showDialogueBox("Pick a card to flip.");
+            const slotId = await askForSlot(game, selectable);
+            await game.hideDialogueBox();
+            const slot = game.slots[slotId];
+            const phase = beaverMoonTransform[slot.phase];
+            await game.destroyCards([slotId]);
+            const cardElement = newCard();
+            cardElement.classList.add("gray", moonPhases[phase]);
+            cardElement.style.top = gh(slot.centerPosYGh - halfCardSize);
+            const patterns = game.simplyPlaceUserCard(
+                phase, slotId, cardElement
+            );
+            gameBoardCardsDiv.append(cardElement);
+            await game.runAnimation(500,
+                new TranslateX(
+                    cardElement, game.outsideScreenX,
+                    slot.centerPosXGh - halfCardSize
+                ),
+            );
+            await game.showAndDeletePatterns(patterns, slotId, "white");
+        },
     },
     SAGITTARIUS: {
         id: 6,
