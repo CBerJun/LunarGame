@@ -123,6 +123,11 @@ div#menu-buttons > button {
     font-size: inherit;
 }
 
+p#best-record-text {
+    margin-left: calc(3 * var(--gh));
+    margin-right: calc(3 * var(--gh));
+}
+
 /* Game scene */
 
 div#game-scene {
