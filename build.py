@@ -124,6 +124,7 @@ def build_backend() -> int:
         " -D LUNAR_EMCC_TAKE_A_BREAK"
         f" -sEXPORTED_FUNCTIONS={exports} -sEXPORT_ES6"
         " -sEXPORTED_RUNTIME_METHODS=getValue,setValue,cwrap"
+        ' -sENVIRONMENT=web "-sINCOMING_MODULE_JS_API=[]"'
         " -sASYNCIFY"
         " -o src/frontend/backend.js"
     )
