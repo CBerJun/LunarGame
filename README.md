@@ -171,4 +171,19 @@ Follow these steps:
 The *game design* credit goes to Google. However, all the code and assets in
 this repo were created by me. You may find, for example, the card textures in
 my clone quite similar to Google's; but if you look closely, they are quite
-different as my cards were flexible SVGs while Google's were PNGs.
+different as my cards were flexible SVGs while Google's were PNGs. Most
+wildcard textures indeed have the same design as Google's, but I drew
+everything from scratch and it took a long time.
+
+## Licensing
+
+The code (`.c`, `.inc`, `.h`, `.py`, `.js`, `.html`, `.css`), config files
+(`.json`, `.gitignore`) and documentation (`.md`) in this repo are licensed
+under Apache License version 2.0 (see `LICENSE-Apache-2.0`).
+
+The assets (`.png`, `.svg`, `.ico`) are licensed under Creative Commons
+Attribution 4.0 International (see `LICENSE-CC-BY-4.0`).
+
+However, since Google invented this game and some of the images have similar
+design as Google's, it's not guaranteed that you can use this project for any
+purpose.
