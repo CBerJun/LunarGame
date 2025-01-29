@@ -1,7 +1,5 @@
 # Rise of the Half Moon Clone
 
-**NOTE: WORK IN PROGRESS. DON'T BELIEVE IN THIS README YET.**
-
 This is a clone of Google's Doodle [Rise of the Half Moon][doodle1], which is a
 **lunar-themed board game**. I found this game quite fun so I decided to
 recreate it.
@@ -23,7 +21,7 @@ and [January 23][doodle4] of 2025.
 * **Mobile screens are supported.**
 * Don't know this game yet? No worry, there is a **tutorial** in-game!
 
-[demo]: https://example.com/
+[demo]: https://halfmoon.pages.dev/
 
 ## Features
 
@@ -77,8 +75,8 @@ and [January 23][doodle4] of 2025.
 * Web page **UI**
   - I spent a long time on **animations/transitions**!
 * **All 12 game boards** from the October game
-* **Wildcards** from October, November, December and January versions of the
-  game:
+* **All 16 wildcards** from October, November, December and January versions of
+  the game (you get one random wildcard every 2-3 levels):
   - October
     * **Hunter Moon**: destroy all cards controlled by the computer on the
       board.
@@ -89,7 +87,7 @@ and [January 23][doodle4] of 2025.
     * **Leonids Meteor Shower**: destroys 2 random cards on the board.
   - November
     * **Winter Solstice**: your claimed cards can not be stolen for the current
-      level.
+      level. (My favorite wildcard :)
     * **Beaver Moon**: flips a card on the board horizontally, or change New
       Moons into Full Moons and vice versa. If that helps you form patterns,
       you get points and claim the cards as normal.
@@ -111,7 +109,7 @@ and [January 23][doodle4] of 2025.
     * **Light of Venus**: get 1 extra point for each card you've claimed at the
       end of current level.
     * **Moon at Apogee**: makes all of the computer's matches worth 1 point for
-      the current level.
+      the current level. (A beautiful card!)
     * **Wolf Moon**: choose 1 of the cards claimed by the computer to destroy
       that card and all cards that are directly connected to it and claimed by
       the computer.
