@@ -97,7 +97,8 @@ div#loading-card-wrapper svg.card {
 
 div#menu-scene.visible,
 div#game-static-layer,
-div#progress-scene.visible {
+div#progress-scene.visible,
+div#custom-settings-scene.visible {
     padding-top: calc(var(--half-moon-size) * 0.55);
     box-sizing: border-box;
 }
@@ -259,7 +260,8 @@ div#stars svg.star {
 
 /* Progress Scene */
 
-div#progress-scene.visible {
+div#progress-scene.visible,
+div#custom-settings-scene.visible {
     display: flex;
     flex-direction: column;
     justify-content: space-evenly;
@@ -270,10 +272,11 @@ div#progress-scene.visible {
     padding-right: calc(3 * var(--gh));
 }
 
-div#progress-buttons {
+div#progress-buttons,
+div#custom-settings-buttons {
     display: flex;
     align-items: center;
-    gap: 1em;
+    gap: calc(3 * var(--gh));
 }
 
 div#progress-buttons > button {
@@ -320,6 +323,18 @@ div#progress-wildcard-inner > * {
 
 div#unlocked-wildcard-icon {
     --wildcard-sprite-size: var(--wildcard-progress-inner-size);
+}
+
+/* Custom settings scene */
+
+div#custom-settings {
+    display: grid;
+    grid-template-columns: max-content max-content;
+    grid-gap: calc(2 * var(--gh));
+}
+
+div#custom-settings > label {
+    text-align: right;
 }
 
 /* Popup */
@@ -372,6 +387,7 @@ div#wildcard-info-container {
     overflow-y: auto;
     width: calc(36 * var(--gh));
     height: 100%;
+    margin-left: calc(1.5 * var(--gh));
 }
 
 div#wildcard-menu > button {
@@ -553,7 +569,8 @@ rect.slot-indicator {
 
 p,
 th,
-td {
+td,
+label {
     color: white;
 }
 
@@ -569,6 +586,10 @@ a:visited {
 }
 a:hover {
     color: #cad7ff;
+}
+
+select {
+    font-family: inherit;
 }
 
 button.ui {

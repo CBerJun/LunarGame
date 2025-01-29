@@ -186,9 +186,28 @@
                 </div>
             </div>
             <div class="scene" id="custom-settings-scene">
-                <!-- Game board -->
-                <!-- AI level -->
-                <!-- Button: Go! -->
+                <p class="centered-text size-large">Custom Level</p>
+                <div id="custom-settings">
+                    <label class="size-normal" for="ai-level-select"
+                        >AI Level</label>
+                    <select class="size-normal" id="ai-level-select"></select>
+                    <label class="size-normal" for="game-board-select"
+                        >Game Board</label>
+                    <select class="size-normal"
+                        id="game-board-select"></select>
+                    <label class="size-normal" for="who-starts-select"
+                        >Who starts?</label>
+                    <select class="size-normal" id="who-starts-select">
+                        <option value="player" selected>You</option>
+                        <option value="computer">The Half Moon</option>
+                    </select>
+                </div>
+                <div id="custom-settings-buttons">
+                    <button type="button" class="ui size-large"
+                        onclick="lunar.onCancelCustomGame()">Back</button>
+                    <button type="button" class="ui size-large"
+                        onclick="lunar.onRunCustomGame()">Go!</button>
+                </div>
             </div>
             <div id="popup-layer">
                 <div class="popup" id="exit-confirm-popup">

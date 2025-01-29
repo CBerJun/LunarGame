@@ -208,6 +208,9 @@ const dialogueContent = document.getElementById("dialogue-content");
 const starsDiv = document.getElementById("stars");
 const exitButton = document.getElementById("exit-button");
 const wildcardsButton = document.getElementById("wildcards-button");
+const aiLevelSelect = document.getElementById("ai-level-select");
+const gameBoardSelect = document.getElementById("game-board-select");
+const whoStartsSelect = document.getElementById("who-starts-select");
 
 const slotButtonSize = 5.25;  // gh
 const cardSize = slotButtonSize * 1.48;
@@ -551,11 +554,45 @@ const AILevel = {
     // 3 has the same effect as 2
     SMARTER: 4,
 };
+const aiLevelDisplayNames = {
+    WEAK: "Easy",
+    GREEDY: "Medium",
+    SMART: "Hard",
+    SMARTER: "Even Harder",
+};
+
+// Populate AI level select box
+const customGameDefaultAILevel = "GREEDY";
+Object.getOwnPropertyNames(AILevel).forEach(id => {
+    const opt = document.createElement("option");
+    opt.textContent = aiLevelDisplayNames[id];
+    opt.value = String(AILevel[id]);
+    if (customGameDefaultAILevel == id) {
+        opt.selected = true;
+    }
+    aiLevelSelect.append(opt);
+});
+
+// Populate game board select box
+const customGameDefaultBoard = "ThreeByThree";
+Object.getOwnPropertyNames(Boards).forEach(id => {
+    if (id == "length") {
+        return;
+    }
+    const opt = document.createElement("option");
+    opt.textContent = id;
+    opt.value = String(Boards[id]);
+    if (customGameDefaultBoard == id) {
+        opt.selected = true;
+    }
+    gameBoardSelect.append(opt);
+});
 
 class Game {
     constructor(aiLevel, boardType, cardsInAHand) {
         this.aiLevel = aiLevel;
         this.cardsInAHand = cardsInAHand;
+        this.userGoesFirst = true;  // May be altered before calling controller
         const db = backend._malloc(backendConst.DisplayableBoardSize);
         this.displayableBoard = db;
         backend._Glue_InitDisplayableBoard(db, boardType);
@@ -719,8 +756,10 @@ class Game {
     }
     async controller() {  // override-able
         await this.drawInitialCards();
-        // User goes first
-        let userRound = true;
+        let userRound = this.userGoesFirst;
+        if (!userRound) {
+            this.computerStartThinking();
+        }
         while (this.slotsFilled != this.slots.length) {
             await (userRound ? this.userRound() : this.computerRound());
             userRound = !userRound;
@@ -1921,7 +1960,7 @@ function addWildcardToDom(id) {
         wildcardPlayButton.classList.toggle("display-none", playedCard);
         if (!playedCard) {
             wildcardPlayButton.onclick = async (event) => {
-                const gm = game.game;
+                const gm = gameState.gameObj.game;
                 gm.disableUserInput();
                 wildcardsButton.setAttribute("disabled", "");
                 await hidePopup();
@@ -1995,6 +2034,7 @@ const progressWildcardPercentage =
 const unlockedWildcardIcon = document.getElementById("unlocked-wildcard-icon");
 
 const difficultyThreshold = [3, 6, 9];
+const cardsInAHand = 3;
 
 function setWildcardIconPercentage(percentage) {
     progressWildcardIcon.setAttribute("y", String(100 - percentage));
@@ -2006,6 +2046,12 @@ class WildcardIconGrow extends FromTo {
         super(from, to, easingFunc);
         this._run = setWildcardIconPercentage;
     }
+}
+
+function updateProgressButtons(lost) {
+    progressLeaveButton.classList.toggle("expanded", lost);
+    progressExitText.classList.toggle("display-none", !lost);
+    progressContinueButton.classList.toggle("display-none", lost);
 }
 
 class LeveledGame {
@@ -2050,7 +2096,7 @@ class LeveledGame {
                 else {
                     gameBoard = randomBoard();
                 }
-                this.game = new Game(aiDepth, gameBoard, 3);
+                this.game = new Game(aiDepth, gameBoard, cardsInAHand);
             }
             enterScene(null);
             gameSceneDiv.style.removeProperty("visibility");
@@ -2082,9 +2128,7 @@ class LeveledGame {
             progressWildcardDiv.classList.toggle(
                 "display-none", isTutorial || allWcsObtained
             );
-            progressLeaveButton.classList.toggle("expanded", us < ls);
-            progressExitText.classList.toggle("display-none", us >= ls);
-            progressContinueButton.classList.toggle("display-none", us < ls);
+            updateProgressButtons(us < ls);
             unlockedWildcardIcon.classList.add("display-none");
             if (us > ls) {
                 // Background left
@@ -2178,24 +2222,117 @@ class LeveledGame {
         }
         // Background middle if needed
         updateRecordText();
+        gameState.state = GameState.MENU;
+        gameState.gameObj = null;
         await enterSceneAnimated("menu-scene");
         this.game = undefined;  // For GC
     }
 }
 
-let game;
+class CustomGame {
+    constructor(aiLevel, gameBoard, userFirst) {
+        this.aiLevel = aiLevel;
+        this.gameBoard = gameBoard;
+        this.userFirst = userFirst;
+    }
+    inGameAbort() {
+        this.game.abort();
+    }
+    async controller() {
+        await fadeOutCurrentScene();
+        // See `LeveledGame` for why we do these:
+        gameSceneDiv.style.visibility = "hidden";
+        enterScene("game-scene");
+        await sleep(1);
+        this.game = new Game(this.aiLevel, this.gameBoard, cardsInAHand);
+        this.game.userGoesFirst = this.userFirst;
+        enterScene(null);
+        gameSceneDiv.style.removeProperty("visibility");
+        enterSceneAnimated("game-scene");
+        let aborted = false;
+        try {
+            await this.game.controller();
+        }
+        catch (exc) {
+            if (exc === ABORTED) {
+                aborted = true;
+            }
+            else {
+                this.game.cleanDom();
+                throw exc;
+            }
+        }
+        const us = this.game.userScore;
+        const ls = this.game.lunarScore;
+        if (activePopup != null) {
+            // Mo more in-game popups after the game finishes
+            await hidePopup();
+        }
+        await fadeOutCurrentScene();
+        this.game.cleanDom();
+        if (aborted) {
+            this.cleanup();
+        }
+        else {
+            // Show progress scene
+            progressTopMessage.textContent = (
+                us > ls ? "You win!" :
+                us < ls ? "The Half Moon wins." :
+                "Draw!"
+            );
+            progressWildcardDiv.classList.add("display-none");
+            progressLevelText.textContent = "Custom Level";
+            progressHint.classList.remove("display-none");
+            progressHint.textContent = `You ${us} : ${ls} Half Moon`;
+            progressStatsTable.classList.add("display-none");
+            updateProgressButtons(true);
+            noLeaveConfirm = true;
+            await enterSceneAnimated("progress-scene");
+        }
+    }
+    async cleanup() {
+        // Call after fading out current scene
+        playedWildcards.clear();
+        gameState.state = GameState.MENU;
+        gameState.gameObj = null;
+        await enterSceneAnimated("menu-scene");
+    }
+}
 
-export async function onTutorial() {
-    game = new LeveledGame(true);
-    game.controller();
+const GameState = {
+    MENU: 0,
+    REGULAR: 1,
+    CUSTOM: 2,
+};
+
+class RunningGameState {
+    constructor() {
+        this.state = GameState.MENU;
+        this.gameObj = null;
+    }
+}
+
+const gameState = new RunningGameState();
+
+function newLeveledGame(tutorial) {
+    const leveledGame = new LeveledGame(tutorial);
+    gameState.state = GameState.REGULAR;
+    gameState.gameObj = leveledGame;
+    leveledGame.controller();
+}
+
+export function onTutorial() {
+    newLeveledGame(true);
 }
 
 export function onPlay() {
-    game = new LeveledGame(false);
-    game.controller();
+    newLeveledGame(false);
 }
 
-export function onCustomGame() {}
+export async function onCustomGame() {
+    await fadeOutCurrentScene();
+    await enterSceneAnimated("custom-settings-scene");
+}
 
 const popupLayer = document.getElementById("popup-layer");
 
@@ -2220,35 +2357,66 @@ export async function hidePopup() {
 
 export let onQuit;
 
-export function onExitGame() {
-    summonPopup("exit-confirm-popup");
+export async function onExitGame() {
     onQuit = async () => {
         await hidePopup();
-        game.inGameAbort();
+        gameState.gameObj.inGameAbort();
     };
+    await summonPopup("exit-confirm-popup");
 }
 
 let noLeaveConfirm = false;
 
-export function onLeave() {
-    if (noLeaveConfirm) {
-        game.progress(false);
+async function progressSceneLeaveHandler() {
+    if (gameState.state == GameState.REGULAR) {
+        gameState.gameObj.progress(false);
+    }
+    else if (gameState.state == GameState.CUSTOM) {
+        await fadeOutCurrentScene();
+        await gameState.gameObj.cleanup();
     }
     else {
-        summonPopup("exit-confirm-popup");
+        throw new Error("Unexpected click on leave button.");
+    }
+}
+
+export async function onLeave() {
+    if (noLeaveConfirm) {
+        await progressSceneLeaveHandler();
+    }
+    else {
+        await summonPopup("exit-confirm-popup");
         onQuit = async () => {
             await hidePopup();
-            game.progress(false);
+            await progressSceneLeaveHandler();
         };
     }
 }
 
 export function onContinue() {
-    game.progress(true);
+    if (gameState.state != GameState.REGULAR) {
+        throw new Error("Unexpected continue button click");
+    }
+    gameState.gameObj.progress(true);
 }
 
 export function onWildcardMenu() {
     summonPopup("wildcard-popup");
     wildcardInfoBox.classList.add("display-none");
     wildcardNoInfoHint.classList.remove("display-none");
+}
+
+export async function onCancelCustomGame() {
+    await fadeOutCurrentScene();
+    await enterSceneAnimated("menu-scene");
+}
+
+export function onRunCustomGame() {
+    const aiLevel = parseInt(aiLevelSelect.value);
+    const gameBoard = parseInt(gameBoardSelect.value);
+    const userFirst = whoStartsSelect.value == "player";
+    gameState.state = GameState.CUSTOM;
+    const game = new CustomGame(aiLevel, gameBoard, userFirst);
+    gameState.gameObj = game;
+    game.controller();
 }
