@@ -144,23 +144,32 @@ def build_bundle() -> int:
         cwd="./src/frontend", shell=True
     ).returncode
 
-@builder("dist/lunar.bundle.min.js", ["build/lunar.bundle.js"])
-def minify_bundle():
-    popen = subprocess.Popen(
-        ["npx", "minify", "../../build/lunar.bundle.js"],
-        cwd="./src/frontend", shell=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    out, err = popen.communicate()
-    if err or not out:
-        return 1
-    with open("dist/lunar.bundle.min.js", "wb") as fp:
-        fp.write(out)
-    return 0
+def _make_minifier(in_file: str, out_file: str):
+    """
+    Make a builder that minifies `in_file` using `npx minify` and
+    outputs to `out_file`.
+    """
+    @builder(out_file, [in_file])
+    def minify():
+        popen = subprocess.Popen(
+            ["npx", "minify", f"../../{in_file}"],
+            cwd="./src/frontend", shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        out, err = popen.communicate()
+        if err or not out:
+            return 1
+        with open(out_file, "wb") as fp:
+            fp.write(out)
+        return 0
+    return minify
+
+minify_bundle = _make_minifier("build/lunar.bundle.js",
+                               "dist/lunar.bundle.min.js")
+minify_html = _make_minifier("src/frontend/index.html", "dist/index.html")
+minify_css = _make_minifier("src/frontend/lunar.css", "dist/lunar.min.css")
 
 STATIC_FILES = [
-    "index.html",
-    "lunar.css",
     "backend.wasm",
     "favicon.ico",
     *glob.iglob("images/*", root_dir="src/frontend"),
@@ -195,6 +204,8 @@ def main() -> int:
         or build_backend()
         or build_bundle()
         or minify_bundle()
+        or minify_html()
+        or minify_css()
         or copy_all_static()
     )
 
