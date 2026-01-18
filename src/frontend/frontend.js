@@ -643,7 +643,7 @@ class Game {
             db + backendConst.DisplayableBoardYLen, int
         );
         this.eshToSvgPx = yLenNoPadding / 100;
-        edgesSvg.style.setProperty("--esh", String(this.eshToSvgPx));
+        edgesSvg.style.setProperty("--esh", `${this.eshToSvgPx}px`);
         // Q is the extra padding in edges SVG so that the phase pair or
         // half moon symbols aren't cut out of the SVG for edges that
         // are near the SVG border.

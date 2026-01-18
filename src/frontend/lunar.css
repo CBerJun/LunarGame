@@ -564,8 +564,8 @@ svg#edges > line.lunar-cycle-symbol {
 rect.slot-indicator {
     fill: none;
     stroke: white;
-    stroke-width: 3;
-    stroke-dasharray: 8 4;
+    stroke-width: 3px;
+    stroke-dasharray: 8px 4px;
     height: 100%;
     width: 100%;
 }
